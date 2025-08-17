@@ -45,10 +45,10 @@ struct RulerSlider: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Assimétrico: esquerda como antes (bom), direita com respiro extra
+            // Padding simétrico para garantir que todos os ticks sejam visíveis
             let leftInset = thumbSize / 2
-            let rightInset = max(thumbSize / 2, 12)
-            let sliderWidth = max(1, geo.size.width - thumbSize - (leftInset + rightInset))
+            let rightInset = thumbSize / 2
+            let sliderWidth = max(1, geo.size.width - leftInset - rightInset)
             let valueRange = range.upperBound - range.lowerBound
             let clampedValue = min(max(value, range.lowerBound), range.upperBound)
             let percent = CGFloat((clampedValue - range.lowerBound) / valueRange)
@@ -74,12 +74,12 @@ struct RulerSlider: View {
                     .padding(.leading, leftInset)
                     .padding(.trailing, rightInset)
 
-                // Régua (posicionamento absoluto para garantir último tick visível)
+                // Régua (posicionamento absoluto para garantir simetria perfeita)
                 ZStack(alignment: .leading) {
                     ForEach(0..<totalTicks, id: \.self) { i in
                         let isMajor = (i % majorTickEvery == 0)
                         let tickW: CGFloat = isMajor ? 3.0 : 1.0
-                        let centerX = CGFloat(i) / CGFloat(totalTicks - 1) * sliderWidth
+                        let centerX = leftInset + (CGFloat(i) / CGFloat(totalTicks - 1) * sliderWidth)
                         Capsule(style: .continuous)
                             .fill(isMajor ? colorSchemeManager.primaryColor : colorSchemeManager.primaryColor.opacity(0.55))
                             .frame(
@@ -88,17 +88,15 @@ struct RulerSlider: View {
                             )
                             .position(x: centerX, y: rulerHeight / 2)
                     }
-                    let endX = sliderWidth
+                    let endX = leftInset + sliderWidth
                     RoundedRectangle(cornerRadius: 1)
                         .fill(colorSchemeManager.primaryColor.opacity(0.10))
                         .frame(width: max(6, sliderWidth * 0.06), height: max(2, rulerHeight * 0.35))
                         .position(x: endX - max(3, (sliderWidth * 0.06)/2), y: rulerHeight * 0.8)
                 }
-                .frame(width: sliderWidth, height: rulerHeight)
-                .padding(.leading, leftInset)
-                .padding(.trailing, rightInset)
+                .frame(width: geo.size.width, height: rulerHeight)
 
-                // Thumb
+                // Thumb - posicionamento corrigido para centrar nos ticks
                 RoundedRectangle(cornerRadius: thumbSize / 2.5, style: .continuous)
                     .fill(Color.accentColor)
                     .shadow(color: Color.accentColor.opacity(0.25), radius: 6, x: 0, y: 2)
@@ -109,7 +107,7 @@ struct RulerSlider: View {
                             .foregroundColor(.white)
                             .frame(width: thumbSize * 1.2, height: thumbSize)
                     )
-                    .offset(x: currentX + leftInset)
+                    .offset(x: leftInset + currentX - (thumbSize * 1.2) / 2)
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .updating($dragOffset) { value, state, _ in
@@ -117,8 +115,10 @@ struct RulerSlider: View {
                             }
                             .onChanged { gesture in
                                 isDragging = true
-                                let sliderWidth = max(1, geo.size.width - thumbSize - (leftInset + rightInset))
-                                let localX = max(0, min(sliderWidth, gesture.location.x - leftInset - thumbSize/2))
+                                let sliderWidth = max(1, geo.size.width - leftInset - rightInset)
+                                // Corrige o cálculo para considerar a largura do thumb
+                                let thumbHalfWidth = (thumbSize * 1.2) / 2
+                                let localX = max(0, min(sliderWidth, gesture.location.x - leftInset))
                                 let percent = localX / sliderWidth
                                 var rawValue = Float(percent) * valueRange + range.lowerBound
 
@@ -549,7 +549,7 @@ private struct ColorTintControls: View {
                 ),
                 range: 0...100,
                 step: 1.0,
-                totalTicks: 31,
+                totalTicks: 21,
                 majorTickEvery: 5,
                 format: { String(format: "%d", Int($0)) }
             )
@@ -598,7 +598,7 @@ private struct ContrastSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
@@ -616,7 +616,7 @@ private struct BrightnessSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
@@ -634,7 +634,7 @@ private struct ExposureSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
@@ -652,7 +652,7 @@ private struct SaturationSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
         )
@@ -670,7 +670,7 @@ private struct VibranceSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
@@ -688,7 +688,7 @@ private struct OpacitySlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%d", 100 - Int($0)) } // 100 a 0
         )
@@ -702,7 +702,7 @@ private struct ColorInvertSlider: View {
             value: $value,
             range: 0.0...1.0,
             step: 0.01,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%.2f", $0) }
         )
@@ -720,7 +720,7 @@ private struct PixelateSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 31,
+            totalTicks: 21,
             majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
         )
