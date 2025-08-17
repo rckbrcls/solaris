@@ -1,34 +1,42 @@
-// Slider customizado com régua, snap e feedback tátil
+import SwiftUI
+import UIKit
+
+// Slider customizado com régua visual padronizada, snap e feedback tátil
 struct RulerSlider: View {
     @Binding var value: Float
     let range: ClosedRange<Float>
     let step: Float
     let format: (Float) -> String
-    let tickSpacing: CGFloat
+    // Padronização: número total de marcas da régua (inclui início e fim)
+    let totalTicks: Int
+    // A cada quantas marcas uma marca maior aparece
     let majorTickEvery: Int
+    // Aparência
     let thumbSize: CGFloat
     let rulerHeight: CGFloat
     let sliderHeight: CGFloat
+
     @GestureState private var dragOffset: CGFloat = 0
     @State private var isDragging = false
-    @State private var lastFeedbackValue: Int? = nil
+    @State private var lastMajorIndexFeedback: Int? = nil
+    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
 
     init(
         value: Binding<Float>,
         range: ClosedRange<Float>,
         step: Float = 1.0,
-        tickSpacing: CGFloat = 12,
+        totalTicks: Int = 31, // padronizado ~30 intervalos
         majorTickEvery: Int = 5,
         thumbSize: CGFloat = 28,
         rulerHeight: CGFloat = 18,
-        sliderHeight: CGFloat = 44,
+        sliderHeight: CGFloat = 48,
         format: @escaping (Float) -> String = { String(format: "%.0f", $0) }
     ) {
         self._value = value
         self.range = range
         self.step = step
-        self.tickSpacing = tickSpacing
-        self.majorTickEvery = majorTickEvery
+        self.totalTicks = max(2, totalTicks)
+        self.majorTickEvery = max(1, majorTickEvery)
         self.thumbSize = thumbSize
         self.rulerHeight = rulerHeight
         self.sliderHeight = sliderHeight
@@ -37,36 +45,54 @@ struct RulerSlider: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Ajusta range para sempre terminar em major tick
-            let tickCount = Int((range.upperBound - range.lowerBound) / step)
-            let adjustedMax = range.lowerBound + Float((tickCount / majorTickEvery) * majorTickEvery) * step
-            let minValue = Int(range.lowerBound / step)
-            let maxValue = Int(adjustedMax / step)
-            let sliderWidth = geo.size.width - thumbSize
-            let valueRange = adjustedMax - range.lowerBound
-            let percent = CGFloat((value - range.lowerBound) / valueRange)
+            let sliderWidth = max(1, geo.size.width - thumbSize)
+            let valueRange = range.upperBound - range.lowerBound
+            let clampedValue = min(max(value, range.lowerBound), range.upperBound)
+            let percent = CGFloat((clampedValue - range.lowerBound) / valueRange)
             let currentX = percent * sliderWidth
+            let spacing = sliderWidth / CGFloat(totalTicks - 1)
+
             ZStack(alignment: .leading) {
-                // Ruler
+                // Trilha suave ao fundo
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                colorSchemeManager.primaryColor.opacity(0.14),
+                                colorSchemeManager.primaryColor.opacity(0.06)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: max(2, rulerHeight * 0.35))
+                    .offset(y: rulerHeight * 0.3)
+                    .padding(.horizontal, thumbSize/2)
+
+                // Régua
                 HStack(spacing: 0) {
-                    ForEach(minValue...maxValue, id: \ .self) { i in
-                        let tickValue = Float(i) * step
-                        Rectangle()
-                            .fill(i % majorTickEvery == 0 ? Color.primary : Color.secondary.opacity(0.5))
-                            .frame(width: 2, height: i % majorTickEvery == 0 ? rulerHeight : rulerHeight * 0.6)
-                        if i != maxValue {
-                            Spacer(minLength: tickSpacing - 2)
+                    ForEach(0..<totalTicks, id: \.self) { i in
+                        let isMajor = (i % majorTickEvery == 0)
+                        Capsule(style: .continuous)
+                            .fill(isMajor ? colorSchemeManager.primaryColor : colorSchemeManager.primaryColor.opacity(0.55))
+                            .frame(width: isMajor ? 2.5 : 1.5,
+                                   height: isMajor ? rulerHeight : rulerHeight * 0.6)
+                        if i != totalTicks - 1 {
+                            Spacer(minLength: spacing - ((isMajor ? 2.5 : 1.5)))
+                                .frame(width: spacing - ((isMajor ? 2.5 : 1.5)))
                         }
                     }
                 }
                 .frame(height: rulerHeight)
                 .padding(.horizontal, thumbSize/2)
+
                 // Thumb
                 RoundedRectangle(cornerRadius: thumbSize / 2.5, style: .continuous)
                     .fill(Color.accentColor)
+                    .shadow(color: Color.accentColor.opacity(0.25), radius: 6, x: 0, y: 2)
                     .frame(width: thumbSize * 1.2, height: thumbSize)
                     .overlay(
-                        Text(format(value))
+                        Text(format(clampedValue))
                             .font(.caption2.bold())
                             .foregroundColor(.white)
                             .frame(width: thumbSize * 1.2, height: thumbSize)
@@ -79,31 +105,46 @@ struct RulerSlider: View {
                             }
                             .onChanged { gesture in
                                 isDragging = true
-                                let sliderWidth = geo.size.width - thumbSize
-                                let percent = max(0, min(1, (gesture.location.x - thumbSize/2) / sliderWidth))
-                                let rawValue = Float(percent) * valueRange + range.lowerBound
-                                // Snap forte nos major ticks
-                                let majorTickStep = step * Float(majorTickEvery)
-                                let nearestMajor = (rawValue / majorTickStep).rounded() * majorTickStep
-                                let snapThreshold: Float = step * 2 // snap mais forte para major
-                                let snapped: Float
-                                if abs(rawValue - nearestMajor) < snapThreshold {
-                                    snapped = nearestMajor
+                                let sliderWidth = max(1, geo.size.width - thumbSize)
+                                let localX = max(0, min(sliderWidth, gesture.location.x - thumbSize/2))
+                                let percent = localX / sliderWidth
+                                var rawValue = Float(percent) * valueRange + range.lowerBound
+
+                                // Snap forte para os majors visuais
+                                let majorIndices = stride(from: 0, to: totalTicks, by: majorTickEvery).map { $0 }
+                                let majorPositions = majorIndices.map { CGFloat($0) * spacing }
+                                let nearestMajorIndex = majorPositions.enumerated().min(by: { abs($0.element - localX) < abs($1.element - localX) })?.offset
+                                let snapPx: CGFloat = max(6, spacing * 0.35)
+                                if let nearestIdx = nearestMajorIndex, abs(majorPositions[nearestIdx] - localX) <= snapPx {
+                                    // trava no valor exato do major visual
+                                    let i = majorIndices[nearestIdx]
+                                    let majorPercent = CGFloat(i) / CGFloat(totalTicks - 1)
+                                    rawValue = Float(majorPercent) * valueRange + range.lowerBound
+                                }
+
+                                // Quantiza para o passo definido
+                                var snapped = (rawValue / step).rounded() * step
+                                snapped = min(max(snapped, range.lowerBound), range.upperBound)
+
+                                // Haptic: quando encosta em um major visual diferente
+                                if let nearestIdx = nearestMajorIndex, abs(majorPositions[nearestIdx] - localX) <= snapPx {
+                                    if lastMajorIndexFeedback != nearestIdx {
+                                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                                        generator.impactOccurred()
+                                        lastMajorIndexFeedback = nearestIdx
+                                    }
                                 } else {
-                                    snapped = (rawValue / step).rounded() * step
+                                    // feedback leve em mudanças discretas maiores
+                                    let generator = UIImpactFeedbackGenerator(style: .light)
+                                    generator.impactOccurred(intensity: 0.6)
+                                    lastMajorIndexFeedback = nil
                                 }
-                                let clamped = min(max(snapped, range.lowerBound), adjustedMax)
-                                let intValue = Int(clamped / step)
-                                if intValue != lastFeedbackValue {
-                                    let generator = UIImpactFeedbackGenerator(style: (abs(clamped - nearestMajor) < 0.01) ? .medium : .light)
-                                    generator.impactOccurred()
-                                    lastFeedbackValue = intValue
-                                }
-                                value = clamped
+
+                                value = snapped
                             }
                             .onEnded { _ in
                                 isDragging = false
-                                lastFeedbackValue = nil
+                                lastMajorIndexFeedback = nil
                             }
                     )
                     .animation(.easeOut(duration: 0.15), value: value)
@@ -120,8 +161,6 @@ struct RulerSlider: View {
 //
 //  Created by Erick Barcelos on 30/05/25.
 //
-
-import SwiftUI
 
 struct Adjustment: Identifiable, Hashable {
     let id: String // unique key
@@ -167,7 +206,7 @@ struct PhotoEditorAdjustments: View {
             if let selected = adjustments.first(where: { $0.id == selectedAdjustment }) {
                 Text(selected.label)
                     .font(.caption2)
-                    .foregroundColor(colorSchemeManager.secondaryColor)
+                    .foregroundColor(colorSchemeManager.primaryColor.opacity(0.6))
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -199,11 +238,11 @@ struct PhotoEditorAdjustments: View {
                                 VStack {
                                     Image(systemName: adj.icon)
                                         .frame(width: 16, height: 16)
-                                        .foregroundColor(isActive ? colorSchemeManager.primaryColor : colorSchemeManager.secondaryColor)
+                                        .foregroundColor(isActive ? colorSchemeManager.primaryColor : colorSchemeManager.primaryColor.opacity(0.55))
                                 }
                                 .padding(8)
                                 .boxBlankStyle(cornerRadius: 8, padding: 10)
-                                .background(isActive ? colorSchemeManager.secondaryColor : Color.clear)
+                                .background(isActive ? colorSchemeManager.primaryColor.opacity(0.08) : Color.clear)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                         } else {
@@ -211,11 +250,11 @@ struct PhotoEditorAdjustments: View {
                                 VStack {
                                     Image(systemName: adj.icon)
                                         .frame(width: 16, height: 16)
-                                        .foregroundColor(isActive ? colorSchemeManager.primaryColor : colorSchemeManager.secondaryColor)
+                                        .foregroundColor(isActive ? colorSchemeManager.primaryColor : colorSchemeManager.primaryColor.opacity(0.55))
                                 }
                                 .padding(8)
                                 .boxBlankStyle(cornerRadius: 8, padding: 10)
-                                .background(isActive ? colorSchemeManager.secondaryColor : Color.clear)
+                                .background(isActive ? colorSchemeManager.primaryColor.opacity(0.08) : Color.clear)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                         }
@@ -247,9 +286,9 @@ struct PhotoEditorAdjustments: View {
                     // Não mostra slider, só mostra se está ativado
                     HStack {
                         Image(systemName: "circle.righthalf.filled")
-                            .foregroundColor(colorInvert == 1.0 ? colorSchemeManager.primaryColor : colorSchemeManager.secondaryColor)
+                            .foregroundColor(colorInvert == 1.0 ? colorSchemeManager.primaryColor : colorSchemeManager.primaryColor.opacity(0.55))
                         Text(colorInvert == 1.0 ? "Invertido" : "Normal")
-                            .foregroundColor(colorSchemeManager.secondaryColor)
+                            .foregroundColor(colorSchemeManager.primaryColor.opacity(0.7))
                     }
                     .padding(.horizontal)
                 } else if selectedAdjustment == "pixelateAmount" {
@@ -295,7 +334,7 @@ struct PhotoEditorAdjustments: View {
                             VStack {
                                 Text("Sombras")
                                     .font(.caption)
-                                    .foregroundColor(colorSchemeManager.secondaryColor)
+                                    .foregroundColor(colorSchemeManager.primaryColor.opacity(0.6))
                                 ColorPicker("", selection: Binding(
                                     get: {
                                         Color(red: Double(duotoneShadowColor.x), 
@@ -320,7 +359,7 @@ struct PhotoEditorAdjustments: View {
                             VStack {
                                 Text("Destaques")
                                     .font(.caption)
-                                    .foregroundColor(colorSchemeManager.secondaryColor)
+                                    .foregroundColor(colorSchemeManager.primaryColor.opacity(0.6))
                                 ColorPicker("", selection: Binding(
                                     get: {
                                         Color(red: Double(duotoneHighlightColor.x),
@@ -361,8 +400,8 @@ private struct ContrastSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -379,8 +418,8 @@ private struct BrightnessSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -397,8 +436,8 @@ private struct ExposureSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -415,8 +454,8 @@ private struct SaturationSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
         )
     }
@@ -433,8 +472,8 @@ private struct VibranceSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -451,8 +490,8 @@ private struct OpacitySlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", 100 - Int($0)) } // 100 a 0
         )
     }
@@ -465,8 +504,8 @@ private struct ColorInvertSlider: View {
             value: $value,
             range: 0.0...1.0,
             step: 0.01,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%.2f", $0) }
         )
     }
@@ -483,8 +522,8 @@ private struct PixelateSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 12,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
         )
     }
@@ -501,8 +540,8 @@ private struct ColorTintSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            tickSpacing: 16,
-            majorTickEvery: 10,
+            totalTicks: 31,
+            majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
         )
     }
@@ -523,8 +562,8 @@ private struct DuotoneShadowIntensitySlider: View {
                 ),
                 range: 0...100,
                 step: 1.0,
-                tickSpacing: 16,
-                majorTickEvery: 10,
+                totalTicks: 31,
+                majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
             )
         }
@@ -546,8 +585,8 @@ private struct DuotoneHighlightIntensitySlider: View {
                 ),
                 range: 0...100,
                 step: 1.0,
-                tickSpacing: 16,
-                majorTickEvery: 10,
+                totalTicks: 31,
+                majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
             )
         }

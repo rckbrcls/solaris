@@ -80,7 +80,8 @@ struct PhotoEditorView: View {
                         .padding(.bottom, 20)
                     }
                     .padding(.vertical)
-                    .background(colorSchemeManager.primaryColor)
+                    // Painel inferior usa cor de fundo que contrasta com o texto primário
+                    .background(colorSchemeManager.secondaryColor)
                     .padding(.bottom, geometry.safeAreaInsets.bottom)
                 }
             }
