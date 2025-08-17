@@ -75,19 +75,19 @@ struct RulerSlider: View {
                     .padding(.trailing, rightInset)
 
                 // Régua (posicionamento absoluto para garantir último tick visível)
-        ZStack(alignment: .leading) {
+                ZStack(alignment: .leading) {
                     ForEach(0..<totalTicks, id: \.self) { i in
                         let isMajor = (i % majorTickEvery == 0)
                         let tickW: CGFloat = isMajor ? 3.0 : 1.0
-                        // Posição base uniformemente distribuída no domínio [0, sliderWidth]
                         let centerX = CGFloat(i) / CGFloat(totalTicks - 1) * sliderWidth
                         Capsule(style: .continuous)
                             .fill(isMajor ? colorSchemeManager.primaryColor : colorSchemeManager.primaryColor.opacity(0.55))
-                            .frame(width: tickW,
-                                   height: isMajor ? rulerHeight : rulerHeight * 0.6)
+                            .frame(
+                                width: tickW,
+                                height: isMajor ? rulerHeight : rulerHeight * 0.6
+                            )
                             .position(x: centerX, y: rulerHeight / 2)
                     }
-                    // Trailing cap suave depois do último tick
                     let endX = sliderWidth
                     RoundedRectangle(cornerRadius: 1)
                         .fill(colorSchemeManager.primaryColor.opacity(0.10))
@@ -95,8 +95,8 @@ struct RulerSlider: View {
                         .position(x: endX - max(3, (sliderWidth * 0.06)/2), y: rulerHeight * 0.8)
                 }
                 .frame(width: sliderWidth, height: rulerHeight)
-        .padding(.leading, leftInset)
-        .padding(.trailing, rightInset)
+                .padding(.leading, leftInset)
+                .padding(.trailing, rightInset)
 
                 // Thumb
                 RoundedRectangle(cornerRadius: thumbSize / 2.5, style: .continuous)
@@ -128,7 +128,6 @@ struct RulerSlider: View {
                                 let nearestMajorIndex = majorPositions.enumerated().min(by: { abs($0.element - localX) < abs($1.element - localX) })?.offset
                                 let snapPx: CGFloat = max(6, spacing * 0.35)
                                 if let nearestIdx = nearestMajorIndex, abs(majorPositions[nearestIdx] - localX) <= snapPx {
-                                    // trava no valor exato do major visual
                                     let i = majorIndices[nearestIdx]
                                     let majorPercent = CGFloat(i) / CGFloat(totalTicks - 1)
                                     rawValue = Float(majorPercent) * valueRange + range.lowerBound
@@ -146,7 +145,6 @@ struct RulerSlider: View {
                                         lastMajorIndexFeedback = nearestIdx
                                     }
                                 } else {
-                                    // feedback leve em mudanças discretas maiores
                                     let generator = UIImpactFeedbackGenerator(style: .light)
                                     generator.impactOccurred(intensity: 0.6)
                                     lastMajorIndexFeedback = nil
@@ -167,15 +165,9 @@ struct RulerSlider: View {
         .boxBlankStyle(cornerRadius: 12, padding: 6)
     }
 }
-//
-//  PhotoEditorAdjustments.swift
-//  souvenir
-//
-//  Created by Erick Barcelos on 30/05/25.
-//
 
 struct Adjustment: Identifiable, Hashable {
-    let id: String // unique key
+    let id: String
     let label: String
     let icon: String
 }
@@ -191,22 +183,24 @@ struct PhotoEditorAdjustments: View {
     @Binding var colorTint: SIMD4<Float>
     @Binding var colorTintIntensity: Float
     @Binding var colorTintFactor: Float
-    // Duotone removido
     @State private var selectedAdjustment: String = "contrast"
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
 
-    // Paleta de tint sugeridas (bonitas/versáteis)
+    private var selectedLabel: String {
+        adjustments.first(where: { $0.id == selectedAdjustment })?.label ?? ""
+    }
+
     private let tintPresets: [SIMD4<Float>] = [
-        SIMD4<Float>(1.00, 0.29, 0.23, 1.0), // vermelho coral
-        SIMD4<Float>(1.00, 0.55, 0.00, 1.0), // laranja
-        SIMD4<Float>(1.00, 0.84, 0.00, 1.0), // amarelo
-        SIMD4<Float>(0.85, 0.80, 0.60, 1.0), // champagne
-        SIMD4<Float>(0.10, 0.78, 0.64, 1.0), // teal
-        SIMD4<Float>(0.00, 0.68, 0.94, 1.0), // azul claro
-        SIMD4<Float>(0.18, 0.39, 0.96, 1.0), // azul acentuado
-    SIMD4<Float>(0.47, 0.33, 0.94, 1.0), // roxo
-    SIMD4<Float>(0.93, 0.33, 0.58, 1.0), // pink
-    SIMD4<Float>(0.64, 0.86, 0.22, 1.0)  // lime
+        SIMD4<Float>(x: 1.00, y: 0.29, z: 0.23, w: 1.0),
+        SIMD4<Float>(x: 1.00, y: 0.55, z: 0.00, w: 1.0),
+        SIMD4<Float>(x: 1.00, y: 0.84, z: 0.00, w: 1.0),
+        SIMD4<Float>(x: 0.85, y: 0.80, z: 0.60, w: 1.0),
+        SIMD4<Float>(x: 0.10, y: 0.78, z: 0.64, w: 1.0),
+        SIMD4<Float>(x: 0.00, y: 0.68, z: 0.94, w: 1.0),
+        SIMD4<Float>(x: 0.18, y: 0.39, z: 0.96, w: 1.0),
+        SIMD4<Float>(x: 0.47, y: 0.33, z: 0.94, w: 1.0),
+        SIMD4<Float>(x: 0.93, y: 0.33, z: 0.58, w: 1.0),
+        SIMD4<Float>(x: 0.64, y: 0.86, z: 0.22, w: 1.0)
     ]
 
     private func colorEquals(_ a: SIMD4<Float>, _ b: SIMD4<Float>, eps: Float = 0.01) -> Bool {
@@ -221,84 +215,58 @@ struct PhotoEditorAdjustments: View {
         Adjustment(id: "vibrance", label: "Vibrance", icon: "waveform.path.ecg"),
         Adjustment(id: "colorInvert", label: "Inverter", icon: "circle.righthalf.filled"),
         Adjustment(id: "pixelateAmount", label: "Pixelizar", icon: "rectangle.split.3x3"),
-    Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette")
+        Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette")
     ]
-    
-    
+
+    private func isAdjustmentActive(_ id: String) -> Bool {
+        switch id {
+        case "contrast": return contrast != 1.0
+        case "brightness": return brightness != 0.0
+        case "exposure": return exposure != 0.0
+        case "saturation": return saturation != 1.0
+        case "vibrance": return vibrance != 0.0
+        case "colorInvert": return colorInvert == 1.0
+        case "pixelateAmount": return pixelateAmount != 1.0
+        case "colorTint": return !(colorTint.x == 0.0 && colorTint.y == 0.0 && colorTint.z == 0.0 && colorTint.w == 0.0)
+        default: return false
+        }
+    }
+
+    private func uiFromFactor(_ factor: Float) -> Float {
+        let clamped = min(max(factor, 0.0), 1.0)
+        return (clamped / 1.0 * 100).rounded()
+    }
+    private func factorFromUI(_ value: Float) -> Float {
+        let pct = min(max(value, 0.0), 100.0) / 100.0
+        return min(max(pct * 1.0, 0.0), 1.0)
+    }
+
     var body: some View {
         VStack {
-            if let selected = adjustments.first(where: { $0.id == selectedAdjustment }) {
-                Text(selected.label)
+            let headerColor = colorSchemeManager.primaryColor.opacity(0.6)
+            if !selectedLabel.isEmpty {
+                Text(selectedLabel)
                     .font(.caption2)
-                    .foregroundColor(colorSchemeManager.primaryColor.opacity(0.6))
+                    .foregroundColor(headerColor)
             }
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(adjustments) { adj in
-                        // Define se o botão está "ativo" (valor diferente do padrão)
-                        let isActive: Bool = {
-                            switch adj.id {
-                            case "contrast": return contrast != 1.0
-                            case "brightness": return brightness != 0.0
-                            case "exposure": return exposure != 0.0
-                            case "saturation": return saturation != 1.0
-                            case "vibrance": return vibrance != 0.0
-                            case "colorInvert": return colorInvert == 1.0
-                            case "pixelateAmount": return pixelateAmount != 1.0
-                            case "colorTint": return !(colorTint.x == 0.0 && colorTint.y == 0.0 && colorTint.z == 0.0 && colorTint.w == 0.0)
-                            case "duotone": return false
-                            default: return false
-                            }
-                        }()
+                        let isActive = isAdjustmentActive(adj.id)
                         let isSelected = selectedAdjustment == adj.id
-
-                        if adj.id == "colorInvert" {
-                            Button(action: { selectedAdjustment = adj.id }) {
-                                VStack {
-                                    Image(systemName: adj.icon)
-                                        .frame(width: 16, height: 16)
-                                        .foregroundColor(
-                                            isSelected || isActive
-                                            ? colorSchemeManager.primaryColor
-                                            : colorSchemeManager.primaryColor.opacity(0.55)
-                                        )
-                                }
-                                .padding(8)
-                                .boxBlankStyle(cornerRadius: 8, padding: 10)
-                                .background(isSelected ? colorSchemeManager.primaryColor.opacity(0.10) : Color.clear)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 3)
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                        } else {
-                            Button(action: { selectedAdjustment = adj.id }) {
-                                VStack {
-                                    Image(systemName: adj.icon)
-                                        .frame(width: 16, height: 16)
-                                        .foregroundColor(
-                                            isSelected || isActive
-                                            ? colorSchemeManager.primaryColor
-                                            : colorSchemeManager.primaryColor.opacity(0.55)
-                                        )
-                                }
-                                .padding(8)
-                                .boxBlankStyle(cornerRadius: 8, padding: 10)
-                .background(isSelected ? colorSchemeManager.primaryColor.opacity(0.10) : Color.clear)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 3)
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                        }
+                        AdjustmentIconButton(
+                            icon: adj.icon,
+                            isActive: isActive,
+                            isSelected: isSelected,
+                            onTap: { selectedAdjustment = adj.id }
+                        )
+                        .environmentObject(colorSchemeManager)
                     }
                 }
                 .padding(.horizontal)
             }
-            
+
             Group {
                 if selectedAdjustment == "contrast" {
                     ContrastSlider(value: $contrast)
@@ -316,140 +284,218 @@ struct PhotoEditorAdjustments: View {
                     VibranceSlider(value: $vibrance)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorInvert" {
-                    // Segmented-like toggle OFF/ON ocupando toda a largura
-                    HStack(spacing: 12) {
-            Button(action: {
-                            if colorInvert != 0.0 {
-                                colorInvert = 0.0
-                                let gen = UIImpactFeedbackGenerator(style: .medium)
-                                gen.impactOccurred()
-                            }
-                        }) {
-                            Text("Off")
-                                .font(.callout.bold())
-                .frame(maxWidth: .infinity, minHeight: 32)
-                .padding(.vertical, 2)
-                                .foregroundColor(colorInvert == 0.0 ? Color.white : colorSchemeManager.primaryColor)
-                                .background(colorInvert == 0.0 ? Color.accentColor : colorSchemeManager.primaryColor.opacity(0.06))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                        Button(action: {
-                            if colorInvert != 1.0 {
-                                colorInvert = 1.0
-                                let gen = UIImpactFeedbackGenerator(style: .medium)
-                                gen.impactOccurred()
-                            }
-                        }) {
-                            Text("On")
-                                .font(.callout.bold())
-                .frame(maxWidth: .infinity, minHeight: 32)
-                .padding(.vertical, 2)
-                                .foregroundColor(colorInvert == 1.0 ? Color.white : colorSchemeManager.primaryColor)
-                                .background(colorInvert == 1.0 ? Color.accentColor : colorSchemeManager.primaryColor.opacity(0.06))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-                    .padding(.horizontal)
+                    InvertToggle(colorInvert: $colorInvert)
+                        .padding(.horizontal)
                 } else if selectedAdjustment == "pixelateAmount" {
                     PixelateSlider(value: $pixelateAmount)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorTint" {
-                    VStack(spacing: 10) {
-                        HStack(spacing: 12) {
-                            // Scroll horizontal de cores (round squares)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    ForEach(Array(tintPresets.enumerated()), id: \.offset) { _, preset in
-                                        let presetColor = Color(red: Double(preset.x), green: Double(preset.y), blue: Double(preset.z))
-                                        let isSelectedPreset = colorEquals(colorTint, preset)
-                                        Button(action: {
-                                            colorTint = SIMD4<Float>(preset.x, preset.y, preset.z, 1.0)
-                                            // Define uma intensidade muito sutil padrão
-                                            colorTintIntensity = 0.9
-                                            let gen = UIImpactFeedbackGenerator(style: .light)
-                                            gen.impactOccurred()
-                                        }) {
-                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                .fill(presetColor)
-                                                .frame(width: 44, height: 44)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 10)
-                                                        .stroke(isSelectedPreset ? Color.accentColor : Color.clear, lineWidth: 3)
-                                                        .padding(0.5)
-                                                )
-                                                .contentShape(RoundedRectangle(cornerRadius: 10))
-                                        }
-                                    }
-                                    // Swatch de cor customizada com ColorPicker inline
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(LinearGradient(colors: [.red, .yellow, .green, .blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                            .frame(width: 44, height: 44)
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.accentColor.opacity((colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) })) ? 1 : 0), lineWidth: 3)
-                                            .frame(width: 44, height: 44)
-                                        ColorPicker("", selection: Binding(
-                                            get: {
-                                                Color(red: Double((colorTint.w == 0 ? 1.0 : colorTint.x)),
-                                                      green: Double((colorTint.w == 0 ? 1.0 : colorTint.y)),
-                                                      blue: Double((colorTint.w == 0 ? 1.0 : colorTint.z)),
-                                                      opacity: 1.0)
-                                            },
-                                            set: { newColor in
-                                                if let components = newColor.cgColor?.components, components.count >= 3 {
-                                                    colorTint = SIMD4<Float>(Float(components[0]), Float(components[1]), Float(components[2]), 1.0)
-                                                    // Define intensidade muito sutil padrão
-                                                    colorTintIntensity = 0.9
-                                                    let gen = UIImpactFeedbackGenerator(style: .light)
-                                                    gen.impactOccurred()
-                                                }
-                                            }
-                                        ))
-                                        .labelsHidden()
-                                        .frame(width: 44, height: 44)
-                                        .opacity(0.02) // invisível, apenas capturando o toque
-                                    }
-                                }
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 6)
-                            }
-                            .boxBlankStyle(cornerRadius: 12, padding: 4)
-                            // Botão para limpar o tint selecionado
-                            Button(action: {
-                                if colorTint.w != 0.0 {
-                                    colorTint = SIMD4<Float>(0.0, 0.0, 0.0, 0.0)
-                                    // Mantém intensidade default para uma próxima seleção
-                                    colorTintIntensity = 0.9
-                                    let gen = UIImpactFeedbackGenerator(style: .medium)
-                                    gen.impactOccurred()
-                                }
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.red)
-                                    .frame(width: 24, height: 24)
-                                    .padding(10)
-                                    .background(colorSchemeManager.primaryColor.opacity(0.06))
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                        }
-                        // Ruler para a força do Tint (factor)
-                        RulerSlider(
-                            value: Binding(
-                                get: { ((min(max(colorTintFactor, 0.0), 0.25)) / 0.25 * 100).rounded() },
-                                set: { colorTintFactor = min(max(($0 / 100) * 0.25, 0.0), 0.25) }
-                            ),
-                            range: 0...100,
-                            step: 1.0,
-                            totalTicks: 31,
-                            majorTickEvery: 5,
-                            format: { String(format: "%d", Int($0)) }
-                        )
-                    }
+                    ColorTintControls(
+                        colorTint: $colorTint,
+                        colorTintIntensity: $colorTintIntensity,
+                        colorTintFactor: $colorTintFactor,
+                        tintPresets: tintPresets
+                    )
                     .padding(.horizontal)
-                    // sem modal adicional
                 }
             }
         }
+    }
+}
+
+private struct InvertToggle: View {
+    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
+    @Binding var colorInvert: Float
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: {
+                if colorInvert != 0.0 {
+                    colorInvert = 0.0
+                    let gen = UIImpactFeedbackGenerator(style: .medium)
+                    gen.impactOccurred()
+                }
+            }) {
+                Text("Off")
+                    .font(.callout.bold())
+                    .frame(maxWidth: .infinity, minHeight: 32)
+                    .padding(.vertical, 2)
+                    .foregroundColor(colorInvert == 0.0 ? Color.white : colorSchemeManager.primaryColor)
+                    .background(colorInvert == 0.0 ? Color.accentColor : colorSchemeManager.primaryColor.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            Button(action: {
+                if colorInvert != 1.0 {
+                    colorInvert = 1.0
+                    let gen = UIImpactFeedbackGenerator(style: .medium)
+                    gen.impactOccurred()
+                }
+            }) {
+                Text("On")
+                    .font(.callout.bold())
+                    .frame(maxWidth: .infinity, minHeight: 32)
+                    .padding(.vertical, 2)
+                    .foregroundColor(colorInvert == 1.0 ? Color.white : colorSchemeManager.primaryColor)
+                    .background(colorInvert == 1.0 ? Color.accentColor : colorSchemeManager.primaryColor.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+}
+
+private struct ColorTintControls: View {
+    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
+    @Binding var colorTint: SIMD4<Float>
+    @Binding var colorTintIntensity: Float
+    @Binding var colorTintFactor: Float
+    let tintPresets: [SIMD4<Float>]
+
+    private func colorEquals(_ a: SIMD4<Float>, _ b: SIMD4<Float>, eps: Float = 0.01) -> Bool {
+        abs(a.x - b.x) < eps && abs(a.y - b.y) < eps && abs(a.z - b.z) < eps && abs((a.w == 0 ? 1.0 : a.w) - (b.w == 0 ? 1.0 : b.w)) < eps
+    }
+    private func uiFromFactor(_ factor: Float) -> Float {
+        let clamped = min(max(factor, 0.0), 1.0)
+        return (clamped / 1.0 * 100).rounded()
+    }
+    private func factorFromUI(_ value: Float) -> Float {
+        let pct = min(max(value, 0.0), 100.0) / 100.0
+        return min(max(pct * 1.0, 0.0), 1.0)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(tintPresets.enumerated()), id: \.offset) { _, preset in
+                            let presetColor = Color(red: Double(preset.x), green: Double(preset.y), blue: Double(preset.z))
+                            let isSelectedPreset = colorEquals(colorTint, preset)
+                            Button(action: {
+                                colorTint = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
+                                colorTintIntensity = 0.9
+                                let gen = UIImpactFeedbackGenerator(style: .light)
+                                gen.impactOccurred()
+                            }) {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(presetColor)
+                                    .frame(width: 44, height: 44)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(isSelectedPreset ? Color.accentColor : Color.clear, lineWidth: 3)
+                                            .padding(0.5)
+                                            .allowsHitTesting(false)
+                                    )
+                                    .contentShape(RoundedRectangle(cornerRadius: 10))
+                                    .padding(2)
+                            }
+                            .buttonStyle(.plain)
+                            .zIndex(2)
+                        }
+                        ZStack {
+                            ColorPicker("", selection: Binding(
+                                get: {
+                                    Color(red: Double((colorTint.w == 0 ? 1.0 : colorTint.x)),
+                                          green: Double((colorTint.w == 0 ? 1.0 : colorTint.y)),
+                                          blue: Double((colorTint.w == 0 ? 1.0 : colorTint.z)),
+                                          opacity: 1.0)
+                                },
+                                set: { newColor in
+                                    #if canImport(UIKit)
+                                    let ui = UIColor(cgColor: newColor.cgColor ?? UIColor.white.cgColor)
+                                    var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
+                                    if ui.getRed(&r, green: &g, blue: &b, alpha: &a) {
+                                        colorTint = SIMD4<Float>(x: Float(r), y: Float(g), z: Float(b), w: 1.0)
+                                        colorTintIntensity = 0.9
+                                        let gen = UIImpactFeedbackGenerator(style: .light)
+                                        gen.impactOccurred()
+                                    }
+                                    #else
+                                    if let components = newColor.cgColor?.components, components.count >= 3 {
+                                        colorTint = SIMD4<Float>(x: Float(components[0]), y: Float(components[1]), z: Float(components[2]), w: 1.0)
+                                        colorTintIntensity = 0.9
+                                    }
+                                    #endif
+                                }
+                            ))
+                            .labelsHidden()
+                            .frame(width: 44, height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(LinearGradient(colors: [.red, .yellow, .green, .blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .allowsHitTesting(false)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.accentColor.opacity((colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) })) ? 1 : 0), lineWidth: 3)
+                                    .allowsHitTesting(false)
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                    .zIndex(1)
+                }
+                .boxBlankStyle(cornerRadius: 12, padding: 4)
+                .zIndex(1)
+                Button(action: {
+                    if colorTint.w != 0.0 {
+                        colorTint = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
+                        colorTintIntensity = 0.9
+                        let gen = UIImpactFeedbackGenerator(style: .medium)
+                        gen.impactOccurred()
+                    }
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.red)
+                        .frame(width: 24, height: 24)
+                        .padding(10)
+                        .background(colorSchemeManager.primaryColor.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
+            RulerSlider(
+                value: Binding(
+                    get: { uiFromFactor(colorTintFactor) },
+                    set: { colorTintFactor = factorFromUI($0) }
+                ),
+                range: 0...100,
+                step: 1.0,
+                totalTicks: 31,
+                majorTickEvery: 5,
+                format: { String(format: "%d", Int($0)) }
+            )
+        }
+    }
+}
+
+private struct AdjustmentIconButton: View {
+    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
+    let icon: String
+    let isActive: Bool
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        let iconColor: Color = (isSelected || isActive)
+            ? colorSchemeManager.primaryColor
+            : colorSchemeManager.primaryColor.opacity(0.55)
+        return Button(action: onTap) {
+            VStack {
+                Image(systemName: icon)
+                    .frame(width: 16, height: 16)
+                    .foregroundColor(iconColor)
+            }
+            .padding(8)
+            .boxBlankStyle(cornerRadius: 8, padding: 10)
+            .background(isSelected ? colorSchemeManager.primaryColor.opacity(0.10) : Color.clear)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 3)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
     }
 }
 

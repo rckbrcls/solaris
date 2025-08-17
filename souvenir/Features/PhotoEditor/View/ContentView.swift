@@ -19,6 +19,7 @@ func exportUIImageAsHEIC(_ image: UIImage) -> Data? {
 }
 
 struct ContentView: View {
+    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     @State private var isImporting: Bool = false
     struct StoredPhoto: Codable {
         let url: URL
@@ -70,13 +71,13 @@ struct ContentView: View {
         NavigationStack {
             ZStack {
                 VStack(spacing: 0) {
-                    Image("logo")
+                    Image(colorSchemeManager.currentColorScheme == .dark ? "logo" : "logo-light")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 80)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 16)
-                        .padding(.bottom, 4)
+                        .frame(maxWidth: .infinity, minHeight: 32, maxHeight: 50)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
                     PhotosScrollView(
                         photos: $photos,
                         selectedItems: $selectedItems,
@@ -252,6 +253,7 @@ struct ContentView: View {
                 }
             }
         }
+        .observeColorScheme()
     }
 
     func navigateToPhotoEditor(photo: UIImage) {

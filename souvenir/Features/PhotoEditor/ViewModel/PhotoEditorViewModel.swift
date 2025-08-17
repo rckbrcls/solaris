@@ -116,7 +116,7 @@ class PhotoEditorViewModel: ObservableObject {
             // Aplica um leve viés de cor via ColorMatrix, preservando a imagem base
             let neutral: Float = 0.5
             let intensity = max(0.0, min(1.0, state.colorTintIntensity))
-            let factor: Float = max(0.0, min(0.25, state.colorTintFactor)) // controla a força
+            let factor: Float = max(0.0, min(1.0, state.colorTintFactor)) // controla a força
             let biasR = (state.colorTint.x - neutral) * factor * intensity
             let biasG = (state.colorTint.y - neutral) * factor * intensity
             let biasB = (state.colorTint.z - neutral) * factor * intensity
@@ -234,7 +234,7 @@ class PhotoEditorViewModel: ObservableObject {
             // Aplica um leve viés de cor via ColorMatrix, preservando a imagem base
             let neutral: Float = 0.5
             let intensity = max(0.0, min(1.0, state.colorTintIntensity))
-            let factor: Float = max(0.0, min(0.25, state.colorTintFactor)) // controla a força
+            let factor: Float = max(0.0, min(1.0, state.colorTintFactor)) // controla a força
             let biasR = (state.colorTint.x - neutral) * factor * intensity
             let biasG = (state.colorTint.y - neutral) * factor * intensity
             let biasB = (state.colorTint.z - neutral) * factor * intensity
