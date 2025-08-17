@@ -59,16 +59,7 @@ struct RulerSlider: View {
             ZStack(alignment: .leading) {
                 // Trilha suave ao fundo
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                colorSchemeManager.primaryColor.opacity(0.12),
-                                colorSchemeManager.primaryColor.opacity(0.05)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(colorSchemeManager.primaryColor.opacity(0.08))
                     .frame(height: max(2, rulerHeight * 0.35))
                     .offset(y: rulerHeight * 0.3)
                     .padding(.leading, leftInset)
@@ -88,11 +79,6 @@ struct RulerSlider: View {
                             )
                             .position(x: centerX, y: rulerHeight / 2)
                     }
-                    let endX = leftInset + sliderWidth
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(colorSchemeManager.primaryColor.opacity(0.10))
-                        .frame(width: max(6, sliderWidth * 0.06), height: max(2, rulerHeight * 0.35))
-                        .position(x: endX - max(3, (sliderWidth * 0.06)/2), y: rulerHeight * 0.8)
                 }
                 .frame(width: geo.size.width, height: rulerHeight)
 
