@@ -27,7 +27,6 @@ struct BoxBlankStyle: ViewModifier {
             .padding(padding)
             .fontWeight(.bold)
             .cornerRadius(cornerRadius)
-            .foregroundColor(.primary)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(Color.primary.opacity(0.3), lineWidth: 1)

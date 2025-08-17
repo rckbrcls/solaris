@@ -44,12 +44,20 @@ struct CategoryButton: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 16, height: 16)
-                    .foregroundColor(selectedCategory == category ? colorSchemeManager.primaryColor : colorSchemeManager.secondaryColor)
+                    .foregroundColor(
+                        selectedCategory == category
+                        ? colorSchemeManager.primaryColor
+                        : colorSchemeManager.primaryColor.opacity(0.55)
+                    )
             }
             .padding(.vertical, 8)
             .padding(.horizontal)
             .boxBlankStyle(cornerRadius: 12, padding: 0, maxWidth: CGFloat.infinity, height: 40)
-            .background(selectedCategory == category ? colorSchemeManager.secondaryColor : Color.clear)
+            .background(
+                selectedCategory == category
+                ? colorSchemeManager.primaryColor.opacity(0.08)
+                : Color.clear
+            )
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
