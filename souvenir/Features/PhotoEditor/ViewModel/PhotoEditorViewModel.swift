@@ -25,6 +25,9 @@ struct PhotoEditState: Codable, Equatable {
     var colorTint: SIMD4<Float> = SIMD4<Float>(0,0,0,0) // padrão: sem cor
     var colorTintIntensity: Float = 1.0 // valor médio para que o slider fique no meio
     var colorTintFactor: Float = 0.12 // força do viés de cor (ColorMatrix)
+    // Dual tone support
+    var colorTintSecondary: SIMD4<Float> = SIMD4<Float>(0,0,0,0) // segunda cor para dual tone
+    var isDualToneActive: Bool = false // indica se o dual tone está ativo
     // Duotone removido
     // Adicione outros parâmetros depois
 }
@@ -113,20 +116,84 @@ class PhotoEditorViewModel: ObservableObject {
         }
         let tintedImage: MTIImage
         if state.colorTint.x > 0.0 || state.colorTint.y > 0.0 || state.colorTint.z > 0.0 {
-            // Aplica um leve viés de cor via ColorMatrix, preservando a imagem base
-            let neutral: Float = 0.5
-            let intensity = max(0.0, min(1.0, state.colorTintIntensity))
-            let factor: Float = max(0.0, min(1.0, state.colorTintFactor)) // controla a força
-            let biasR = (state.colorTint.x - neutral) * factor * intensity
-            let biasG = (state.colorTint.y - neutral) * factor * intensity
-            let biasB = (state.colorTint.z - neutral) * factor * intensity
-            let matrixFilter = MTIColorMatrixFilter()
-            matrixFilter.inputImage = pixelatedImage
-            let mat = simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
-            let bias = SIMD4<Float>(biasR, biasG, biasB, 0)
-            matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: bias)
-            guard let output = matrixFilter.outputImage else { return nil }
-            tintedImage = output
+            if state.isDualToneActive && (state.colorTintSecondary.x > 0.0 || state.colorTintSecondary.y > 0.0 || state.colorTintSecondary.z > 0.0) {
+                // Dual tone real: mapeia luminância para duas cores
+                // 1. Converte para grayscale primeiro para obter luminância
+                let grayscaleFilter = MTIColorMatrixFilter()
+                grayscaleFilter.inputImage = pixelatedImage
+                
+                // Matriz para converter para grayscale (preserva luminância)
+                let grayscaleMatrix = simd_float4x4(
+                    SIMD4<Float>(0.299, 0.299, 0.299, 0),
+                    SIMD4<Float>(0.587, 0.587, 0.587, 0), 
+                    SIMD4<Float>(0.114, 0.114, 0.114, 0),
+                    SIMD4<Float>(0, 0, 0, 1)
+                )
+                grayscaleFilter.colorMatrix = MTIColorMatrix(matrix: grayscaleMatrix, bias: SIMD4<Float>(0, 0, 0, 0))
+                
+                guard let grayscaleImage = grayscaleFilter.outputImage else { return nil }
+                
+                // 2. Aplica dual tone usando blend de multiply e screen
+                let shadowColor = state.colorTint
+                let highlightColor = state.colorTintSecondary
+                let intensity = max(0.0, min(1.0, state.colorTintIntensity))
+                let factor: Float = max(0.0, min(1.0, state.colorTintFactor))
+                
+                // Cria imagens sólidas das cores
+                let shadowColorImage = MTIImage(color: MTIColor(
+                    red: Float(shadowColor.x), 
+                    green: Float(shadowColor.y), 
+                    blue: Float(shadowColor.z), 
+                    alpha: 1.0
+                ), sRGB: false, size: pixelatedImage.size)
+                
+                let highlightColorImage = MTIImage(color: MTIColor(
+                    red: Float(highlightColor.x), 
+                    green: Float(highlightColor.y), 
+                    blue: Float(highlightColor.z), 
+                    alpha: 1.0
+                ), sRGB: false, size: pixelatedImage.size)
+                
+                // Blend sombras: multiply (escurece)
+                let shadowBlend = MTIBlendFilter(blendMode: .multiply)
+                shadowBlend.inputImage = shadowColorImage
+                shadowBlend.inputBackgroundImage = grayscaleImage
+                shadowBlend.intensity = factor * intensity
+                
+                guard let shadowResult = shadowBlend.outputImage else { return nil }
+                
+                // Blend highlights: screen (clareia)
+                let highlightBlend = MTIBlendFilter(blendMode: .screen)
+                highlightBlend.inputImage = highlightColorImage
+                highlightBlend.inputBackgroundImage = shadowResult
+                highlightBlend.intensity = factor * intensity * 0.7 // Um pouco menos intenso
+                
+                guard let dualToneResult = highlightBlend.outputImage else { return nil }
+                
+                // Blend final com imagem original para preservar detalhes
+                let finalBlend = MTIBlendFilter(blendMode: .normal)
+                finalBlend.inputImage = dualToneResult
+                finalBlend.inputBackgroundImage = pixelatedImage
+                finalBlend.intensity = factor * intensity
+                
+                guard let output = finalBlend.outputImage else { return nil }
+                tintedImage = output
+            } else {
+                // Tint simples original
+                let neutral: Float = 0.5
+                let intensity = max(0.0, min(1.0, state.colorTintIntensity))
+                let factor: Float = max(0.0, min(1.0, state.colorTintFactor)) // controla a força
+                let biasR = (state.colorTint.x - neutral) * factor * intensity
+                let biasG = (state.colorTint.y - neutral) * factor * intensity
+                let biasB = (state.colorTint.z - neutral) * factor * intensity
+                let matrixFilter = MTIColorMatrixFilter()
+                matrixFilter.inputImage = pixelatedImage
+                let mat = simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+                let bias = SIMD4<Float>(biasR, biasG, biasB, 0)
+                matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: bias)
+                guard let output = matrixFilter.outputImage else { return nil }
+                tintedImage = output
+            }
         } else {
             tintedImage = pixelatedImage
         }
@@ -231,20 +298,84 @@ class PhotoEditorViewModel: ObservableObject {
         // Filtro de color tint (quando uma cor for selecionada, independente da intensidade)
         let tintedImage: MTIImage
         if state.colorTint.x > 0.0 || state.colorTint.y > 0.0 || state.colorTint.z > 0.0 {
-            // Aplica um leve viés de cor via ColorMatrix, preservando a imagem base
-            let neutral: Float = 0.5
-            let intensity = max(0.0, min(1.0, state.colorTintIntensity))
-            let factor: Float = max(0.0, min(1.0, state.colorTintFactor)) // controla a força
-            let biasR = (state.colorTint.x - neutral) * factor * intensity
-            let biasG = (state.colorTint.y - neutral) * factor * intensity
-            let biasB = (state.colorTint.z - neutral) * factor * intensity
-            let matrixFilter = MTIColorMatrixFilter()
-            matrixFilter.inputImage = pixelatedImage
-            let mat = simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
-            let bias = SIMD4<Float>(biasR, biasG, biasB, 0)
-            matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: bias)
-            guard let output = matrixFilter.outputImage else { return }
-            tintedImage = output
+            if state.isDualToneActive && (state.colorTintSecondary.x > 0.0 || state.colorTintSecondary.y > 0.0 || state.colorTintSecondary.z > 0.0) {
+                // Dual tone real: mapeia luminância para duas cores
+                // 1. Converte para grayscale primeiro para obter luminância
+                let grayscaleFilter = MTIColorMatrixFilter()
+                grayscaleFilter.inputImage = pixelatedImage
+                
+                // Matriz para converter para grayscale (preserva luminância)
+                let grayscaleMatrix = simd_float4x4(
+                    SIMD4<Float>(0.299, 0.299, 0.299, 0),
+                    SIMD4<Float>(0.587, 0.587, 0.587, 0), 
+                    SIMD4<Float>(0.114, 0.114, 0.114, 0),
+                    SIMD4<Float>(0, 0, 0, 1)
+                )
+                grayscaleFilter.colorMatrix = MTIColorMatrix(matrix: grayscaleMatrix, bias: SIMD4<Float>(0, 0, 0, 0))
+                
+                guard let grayscaleImage = grayscaleFilter.outputImage else { return }
+                
+                // 2. Aplica dual tone usando blend de multiply e screen
+                let shadowColor = state.colorTint
+                let highlightColor = state.colorTintSecondary
+                let intensity = max(0.0, min(1.0, state.colorTintIntensity))
+                let factor: Float = max(0.0, min(1.0, state.colorTintFactor))
+                
+                // Cria imagens sólidas das cores
+                let shadowColorImage = MTIImage(color: MTIColor(
+                    red: Float(shadowColor.x), 
+                    green: Float(shadowColor.y), 
+                    blue: Float(shadowColor.z), 
+                    alpha: 1.0
+                ), sRGB: false, size: pixelatedImage.size)
+                
+                let highlightColorImage = MTIImage(color: MTIColor(
+                    red: Float(highlightColor.x), 
+                    green: Float(highlightColor.y), 
+                    blue: Float(highlightColor.z), 
+                    alpha: 1.0
+                ), sRGB: false, size: pixelatedImage.size)
+                
+                // Blend sombras: multiply (escurece)
+                let shadowBlend = MTIBlendFilter(blendMode: .multiply)
+                shadowBlend.inputImage = shadowColorImage
+                shadowBlend.inputBackgroundImage = grayscaleImage
+                shadowBlend.intensity = factor * intensity
+                
+                guard let shadowResult = shadowBlend.outputImage else { return }
+                
+                // Blend highlights: screen (clareia)
+                let highlightBlend = MTIBlendFilter(blendMode: .screen)
+                highlightBlend.inputImage = highlightColorImage
+                highlightBlend.inputBackgroundImage = shadowResult
+                highlightBlend.intensity = factor * intensity * 0.7 // Um pouco menos intenso
+                
+                guard let dualToneResult = highlightBlend.outputImage else { return }
+                
+                // Blend final com imagem original para preservar detalhes
+                let finalBlend = MTIBlendFilter(blendMode: .normal)
+                finalBlend.inputImage = dualToneResult
+                finalBlend.inputBackgroundImage = pixelatedImage
+                finalBlend.intensity = factor * intensity
+                
+                guard let output = finalBlend.outputImage else { return }
+                tintedImage = output
+            } else {
+                // Tint simples original
+                let neutral: Float = 0.5
+                let intensity = max(0.0, min(1.0, state.colorTintIntensity))
+                let factor: Float = max(0.0, min(1.0, state.colorTintFactor)) // controla a força
+                let biasR = (state.colorTint.x - neutral) * factor * intensity
+                let biasG = (state.colorTint.y - neutral) * factor * intensity
+                let biasB = (state.colorTint.z - neutral) * factor * intensity
+                let matrixFilter = MTIColorMatrixFilter()
+                matrixFilter.inputImage = pixelatedImage
+                let mat = simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+                let bias = SIMD4<Float>(biasR, biasG, biasB, 0)
+                matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: bias)
+                guard let output = matrixFilter.outputImage else { return }
+                tintedImage = output
+            }
         } else {
             tintedImage = pixelatedImage
         }

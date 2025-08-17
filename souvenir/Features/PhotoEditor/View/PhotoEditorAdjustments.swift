@@ -181,6 +181,8 @@ struct PhotoEditorAdjustments: View {
     @Binding var colorInvert: Float
     @Binding var pixelateAmount: Float
     @Binding var colorTint: SIMD4<Float>
+    @Binding var colorTintSecondary: SIMD4<Float>
+    @Binding var isDualToneActive: Bool
     @Binding var colorTintIntensity: Float
     @Binding var colorTintFactor: Float
     @State private var selectedAdjustment: String = "contrast"
@@ -292,6 +294,8 @@ struct PhotoEditorAdjustments: View {
                 } else if selectedAdjustment == "colorTint" {
                     ColorTintControls(
                         colorTint: $colorTint,
+                        colorTintSecondary: $colorTintSecondary,
+                        isDualToneActive: $isDualToneActive,
                         colorTintIntensity: $colorTintIntensity,
                         colorTintFactor: $colorTintFactor,
                         tintPresets: tintPresets
@@ -346,6 +350,8 @@ private struct InvertToggle: View {
 private struct ColorTintControls: View {
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     @Binding var colorTint: SIMD4<Float>
+    @Binding var colorTintSecondary: SIMD4<Float>
+    @Binding var isDualToneActive: Bool
     @Binding var colorTintIntensity: Float
     @Binding var colorTintFactor: Float
     let tintPresets: [SIMD4<Float>]
@@ -364,13 +370,49 @@ private struct ColorTintControls: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            // Indicador de dual tone
+            if isDualToneActive {
+                HStack(spacing: 8) {
+                    Text("Dual Tone Ativo")
+                        .font(.caption)
+                        .foregroundColor(colorSchemeManager.primaryColor.opacity(0.7))
+                    
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color(red: Double(colorTint.x), green: Double(colorTint.y), blue: Double(colorTint.z)))
+                            .frame(width: 12, height: 12)
+                        Circle()
+                            .fill(Color(red: Double(colorTintSecondary.x), green: Double(colorTintSecondary.y), blue: Double(colorTintSecondary.z)))
+                            .frame(width: 12, height: 12)
+                    }
+                    
+                    Spacer()
+                    
+                    Button("Limpar") {
+                        isDualToneActive = false
+                        colorTintSecondary = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
+                        let gen = UIImpactFeedbackGenerator(style: .medium)
+                        gen.impactOccurred()
+                    }
+                    .font(.caption)
+                    .foregroundColor(.red)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(colorSchemeManager.primaryColor.opacity(0.06))
+                .cornerRadius(8)
+            }
+            
             HStack(spacing: 12) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(Array(tintPresets.enumerated()), id: \.offset) { _, preset in
                             let presetColor = Color(red: Double(preset.x), green: Double(preset.y), blue: Double(preset.z))
                             let isSelectedPreset = colorEquals(colorTint, preset)
+                            let isSelectedSecondary = isDualToneActive && colorEquals(colorTintSecondary, preset)
+                            
                             Button(action: {
+                                // Tap normal - seleciona cor primária
                                 colorTint = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
                                 colorTintIntensity = 0.9
                                 let gen = UIImpactFeedbackGenerator(style: .light)
@@ -381,14 +423,42 @@ private struct ColorTintControls: View {
                                     .frame(width: 44, height: 44)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .stroke(isSelectedPreset ? Color.accentColor : Color.clear, lineWidth: 3)
+                                            .stroke(
+                                                isSelectedPreset ? Color.accentColor : 
+                                                isSelectedSecondary ? Color.orange : Color.clear, 
+                                                lineWidth: 3
+                                            )
                                             .padding(0.5)
                                             .allowsHitTesting(false)
+                                    )
+                                    .overlay(
+                                        // Indicador visual para dual tone
+                                        Group {
+                                            if isSelectedSecondary {
+                                                Image(systemName: "2.circle.fill")
+                                                    .foregroundColor(.white)
+                                                    .background(Circle().fill(Color.orange))
+                                                    .font(.caption2)
+                                                    .offset(x: 12, y: -12)
+                                            }
+                                        }
                                     )
                                     .contentShape(RoundedRectangle(cornerRadius: 10))
                                     .padding(2)
                             }
                             .buttonStyle(.plain)
+                            .simultaneousGesture(
+                                LongPressGesture(minimumDuration: 0.5)
+                                    .onEnded { _ in
+                                        // Long press - seleciona cor secundária para dual tone
+                                        if colorTint.w > 0 { // só permite se já tiver uma cor primária
+                                            colorTintSecondary = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
+                                            isDualToneActive = true
+                                            let gen = UIImpactFeedbackGenerator(style: .heavy)
+                                            gen.impactOccurred()
+                                        }
+                                    }
+                            )
                             .zIndex(2)
                         }
                         ZStack {
@@ -429,6 +499,22 @@ private struct ColorTintControls: View {
                                     .stroke(Color.accentColor.opacity((colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) })) ? 1 : 0), lineWidth: 3)
                                     .allowsHitTesting(false)
                             )
+                            .overlay(
+                                // Indicador para dual tone no ColorPicker
+                                Group {
+                                    if isDualToneActive {
+                                        HStack(spacing: 2) {
+                                            Circle()
+                                                .fill(Color(red: Double(colorTint.x), green: Double(colorTint.y), blue: Double(colorTint.z)))
+                                                .frame(width: 8, height: 8)
+                                            Circle()
+                                                .fill(Color(red: Double(colorTintSecondary.x), green: Double(colorTintSecondary.y), blue: Double(colorTintSecondary.z)))
+                                                .frame(width: 8, height: 8)
+                                        }
+                                        .offset(y: 12)
+                                    }
+                                }
+                            )
                         }
                     }
                     .padding(.horizontal, 6)
@@ -439,8 +525,10 @@ private struct ColorTintControls: View {
                 .boxBlankStyle(cornerRadius: 12, padding: 4)
                 .zIndex(1)
                 Button(action: {
-                    if colorTint.w != 0.0 {
+                    if colorTint.w != 0.0 || isDualToneActive {
                         colorTint = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
+                        colorTintSecondary = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
+                        isDualToneActive = false
                         colorTintIntensity = 0.9
                         let gen = UIImpactFeedbackGenerator(style: .medium)
                         gen.impactOccurred()

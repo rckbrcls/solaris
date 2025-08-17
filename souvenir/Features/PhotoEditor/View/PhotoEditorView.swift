@@ -56,6 +56,8 @@ struct PhotoEditorView: View {
                                     colorInvert: $viewModel.editState.colorInvert,
                                     pixelateAmount: $viewModel.editState.pixelateAmount,
                                     colorTint: $viewModel.editState.colorTint,
+                                    colorTintSecondary: $viewModel.editState.colorTintSecondary,
+                                    isDualToneActive: $viewModel.editState.isDualToneActive,
                                     colorTintIntensity: $viewModel.editState.colorTintIntensity,
                                     colorTintFactor: $viewModel.editState.colorTintFactor
                                 )
