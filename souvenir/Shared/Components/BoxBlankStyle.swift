@@ -31,6 +31,7 @@ struct BoxBlankStyle: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(Color.primary.opacity(0.3), lineWidth: 1)
                     .frame(maxWidth: maxWidth ?? width, maxHeight: maxHeight ?? height)
+                    .allowsHitTesting(false)
             )
     }
 }

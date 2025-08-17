@@ -53,16 +53,10 @@ struct PhotoEditorView: View {
                                     exposure: $viewModel.editState.exposure,
                                     saturation: $viewModel.editState.saturation,
                                     vibrance: $viewModel.editState.vibrance,
-                                    opacity: $viewModel.editState.opacity,
                                     colorInvert: $viewModel.editState.colorInvert,
                                     pixelateAmount: $viewModel.editState.pixelateAmount,
                                     colorTint: $viewModel.editState.colorTint,
-                                    colorTintIntensity: $viewModel.editState.colorTintIntensity,
-                                    duotoneEnabled: $viewModel.editState.duotoneEnabled,
-                                    duotoneShadowColor: $viewModel.editState.duotoneShadowColor,
-                                    duotoneHighlightColor: $viewModel.editState.duotoneHighlightColor,
-                                    duotoneShadowIntensity: $viewModel.editState.duotoneShadowIntensity,
-                                    duotoneHighlightIntensity: $viewModel.editState.duotoneHighlightIntensity
+                                    colorTintIntensity: $viewModel.editState.colorTintIntensity
                                 )
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                             case "sticker":
