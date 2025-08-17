@@ -190,6 +190,7 @@ struct PhotoEditorAdjustments: View {
     @Binding var pixelateAmount: Float
     @Binding var colorTint: SIMD4<Float>
     @Binding var colorTintIntensity: Float
+    @Binding var colorTintFactor: Float
     // Duotone removido
     @State private var selectedAdjustment: String = "contrast"
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
@@ -353,7 +354,8 @@ struct PhotoEditorAdjustments: View {
                     PixelateSlider(value: $pixelateAmount)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorTint" {
-                    HStack(spacing: 12) {
+                    VStack(spacing: 10) {
+                        HStack(spacing: 12) {
                             // Scroll horizontal de cores (round squares)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
@@ -430,6 +432,19 @@ struct PhotoEditorAdjustments: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                         }
+                        // Ruler para a força do Tint (factor)
+                        RulerSlider(
+                            value: Binding(
+                                get: { ((min(max(colorTintFactor, 0.0), 0.25)) / 0.25 * 100).rounded() },
+                                set: { colorTintFactor = min(max(($0 / 100) * 0.25, 0.0), 0.25) }
+                            ),
+                            range: 0...100,
+                            step: 1.0,
+                            totalTicks: 31,
+                            majorTickEvery: 5,
+                            format: { String(format: "%d", Int($0)) }
+                        )
+                    }
                     .padding(.horizontal)
                     // sem modal adicional
                 }

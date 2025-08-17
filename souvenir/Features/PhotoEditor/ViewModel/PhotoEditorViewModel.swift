@@ -24,6 +24,7 @@ struct PhotoEditState: Codable, Equatable {
     // Color tint (RGBA, valores de 0 a 1)
     var colorTint: SIMD4<Float> = SIMD4<Float>(0,0,0,0) // padrão: sem cor
     var colorTintIntensity: Float = 1.0 // valor médio para que o slider fique no meio
+    var colorTintFactor: Float = 0.12 // força do viés de cor (ColorMatrix)
     // Duotone removido
     // Adicione outros parâmetros depois
 }
@@ -115,7 +116,7 @@ class PhotoEditorViewModel: ObservableObject {
             // Aplica um leve viés de cor via ColorMatrix, preservando a imagem base
             let neutral: Float = 0.5
             let intensity = max(0.0, min(1.0, state.colorTintIntensity))
-            let factor: Float = 0.12 // força máxima do viés (um pouco mais forte)
+            let factor: Float = max(0.0, min(0.25, state.colorTintFactor)) // controla a força
             let biasR = (state.colorTint.x - neutral) * factor * intensity
             let biasG = (state.colorTint.y - neutral) * factor * intensity
             let biasB = (state.colorTint.z - neutral) * factor * intensity
@@ -233,7 +234,7 @@ class PhotoEditorViewModel: ObservableObject {
             // Aplica um leve viés de cor via ColorMatrix, preservando a imagem base
             let neutral: Float = 0.5
             let intensity = max(0.0, min(1.0, state.colorTintIntensity))
-            let factor: Float = 0.12 // força máxima do viés (um pouco mais forte)
+            let factor: Float = max(0.0, min(0.25, state.colorTintFactor)) // controla a força
             let biasR = (state.colorTint.x - neutral) * factor * intensity
             let biasG = (state.colorTint.y - neutral) * factor * intensity
             let biasB = (state.colorTint.z - neutral) * factor * intensity
