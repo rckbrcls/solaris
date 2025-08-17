@@ -72,7 +72,7 @@ struct RulerSlider: View {
                         let tickW: CGFloat = isMajor ? 3.0 : 1.0
                         let centerX = leftInset + (CGFloat(i) / CGFloat(totalTicks - 1) * sliderWidth)
                         Capsule(style: .continuous)
-                            .fill(isMajor ? colorSchemeManager.primaryColor : colorSchemeManager.primaryColor.opacity(0.55))
+                            .fill(isMajor ? colorSchemeManager.primaryColor.opacity(0.85) : colorSchemeManager.primaryColor.opacity(0.55))
                             .frame(
                                 width: tickW,
                                 height: isMajor ? rulerHeight : rulerHeight * 0.6
@@ -535,8 +535,8 @@ private struct ColorTintControls: View {
                 ),
                 range: 0...100,
                 step: 1.0,
-                totalTicks: 21,
-                majorTickEvery: 5,
+                totalTicks: 101,
+                majorTickEvery: 10,
                 format: { String(format: "%d", Int($0)) }
             )
         }
@@ -584,8 +584,8 @@ private struct ContrastSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -602,8 +602,8 @@ private struct BrightnessSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -620,8 +620,8 @@ private struct ExposureSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -638,8 +638,8 @@ private struct SaturationSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
         )
     }
@@ -656,8 +656,8 @@ private struct VibranceSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
         )
     }
@@ -674,8 +674,8 @@ private struct OpacitySlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%d", 100 - Int($0)) } // 100 a 0
         )
     }
@@ -688,8 +688,8 @@ private struct ColorInvertSlider: View {
             value: $value,
             range: 0.0...1.0,
             step: 0.01,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%.2f", $0) }
         )
     }
@@ -706,8 +706,8 @@ private struct PixelateSlider: View {
             ),
             range: 0...100,
             step: 1.0,
-            totalTicks: 21,
-            majorTickEvery: 5,
+            totalTicks: 101,
+            majorTickEvery: 10,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
         )
     }
