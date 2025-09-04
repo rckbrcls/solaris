@@ -38,6 +38,7 @@ struct ContentView: View {
     @State private var selectedPhotoIndex: Int? = nil
     @State private var isSelectionActive: Bool = false
     @State private var didInitialLoad: Bool = false
+    @State private var importWorkItem: DispatchWorkItem? = nil
 
     @Namespace private var ns
 
@@ -81,9 +82,17 @@ struct ContentView: View {
                 LoadingOverlay(isVisible: $isBusy, title: busyTitle)
             }
             .onChange(of: selectedItems) { _, newItems in
-                guard !newItems.isEmpty, !isImportFlowActive else { return }
-                isImportFlowActive = true
-                processImport(items: newItems, rawHandling: .original)
+                // Debounce para capturar a seleção final do PhotosPicker (vários updates sequenciais)
+                importWorkItem?.cancel()
+                guard !newItems.isEmpty else { return }
+                let snapshot = newItems
+                let work = DispatchWorkItem {
+                    if isImportFlowActive { return }
+                    isImportFlowActive = true
+                    processImport(items: snapshot, rawHandling: .original)
+                }
+                importWorkItem = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
             }
             .onAppear {
                 guard !didInitialLoad else { return }

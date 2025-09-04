@@ -12,43 +12,55 @@ struct PhotoGridItem: View {
     let index: Int
     let ns: Namespace.ID
     let isSelected: Bool
+    let size: CGFloat?
     var onLongPress: () -> Void
     // Novo closure para tratar o toque simples
     var onTap: () -> Void
 
     @State private var isPressed: Bool = false
 
+    init(photo: UIImage,
+         index: Int,
+         ns: Namespace.ID,
+         isSelected: Bool,
+         size: CGFloat? = nil,
+         onLongPress: @escaping () -> Void,
+         onTap: @escaping () -> Void) {
+        self.photo = photo
+        self.index = index
+        self.ns = ns
+        self.isSelected = isSelected
+        self.size = size
+        self.onLongPress = onLongPress
+        self.onTap = onTap
+    }
+
     var body: some View {
         ZStack {
             Image(uiImage: photo)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 100, height: 100)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .scaleEffect(isPressed ? 0.95 : 1.0)
-                .animation(.easeInOut(duration: 0.2), value: isPressed)
                 .matchedTransitionSource(id: "photo_\(index)", in: ns)
-            
-            RoundedRectangle(cornerRadius: 8)
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 3)
-                .frame(width: 100, height: 100)
-        }
+                .allowsHitTesting(false)
+        )
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isPressed)
         // Determina a área de toque completa, e unifica o onTap aqui
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onTapGesture { onTap() }
         .onLongPressGesture(
             minimumDuration: 0.2,
             maximumDistance: 10,
             pressing: { inProgress in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isPressed = inProgress
-                }
+                withAnimation(.easeInOut(duration: 0.2)) { isPressed = inProgress }
             },
-            perform: {
-                onLongPress()
-            }
+            perform: { onLongPress() }
         )
     }
 }

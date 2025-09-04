@@ -58,6 +58,7 @@ struct PhotosScrollView<PhotoType>: View {
                                 index: index,
                                 ns: ns,
                                 isSelected: selectedPhotoIndices.contains(index),
+                                size: cellSize,
                                 onLongPress: {
                                     let generator = UIImpactFeedbackGenerator(style: .medium)
                                     generator.impactOccurred()
@@ -73,13 +74,12 @@ struct PhotosScrollView<PhotoType>: View {
                                     }
                                 }
                             )
-                            .frame(width: cellSize, height: cellSize)
                         }
                     }
                     .padding(.horizontal, sidePadding)
                     .padding(.vertical, 12)
                 }
-                .frame(height: 0) // evita ocupar altura infinita; o conteúdo do grid determina o scroll
+                // O GeometryReader já define o layout; não force altura 0
             }
             if !selectedPhotoIndices.isEmpty {
                 HStack {
