@@ -3,6 +3,31 @@ import AVFoundation
 import Foundation
 import UIKit  // Adicionado para garantir que UIImage está disponível
 
+// Estilo consistente para ícones redondos na câmera
+private struct CameraIconButtonStyle: ViewModifier {
+    var size: CGFloat = 44
+    var background: Material = .ultraThinMaterial
+    var foreground: Color = .primary
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundColor(foreground)
+            .frame(width: size, height: size)
+            .background(background, in: Circle())
+            .overlay(
+                Circle()
+                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+            )
+            .contentShape(Circle())
+    }
+}
+
+private extension View {
+    func cameraIconStyle(size: CGFloat = 44, background: Material = .ultraThinMaterial) -> some View {
+        self.modifier(CameraIconButtonStyle(size: size, background: background))
+    }
+}
+
 struct PhotoCaptureView: View {
     var onPhotoCaptured: (UIImage) -> Void
     @State private var capturedImage: UIImage? = nil
@@ -10,7 +35,8 @@ struct PhotoCaptureView: View {
     @State private var isFlashOn: Bool = false
     @State private var isGridOn: Bool = false
     @State private var zoomFactor: CGFloat = 1.0
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) var dismiss
+    @State private var dragOffsetY: CGFloat = 0
     
     var body: some View {
         VStack {
@@ -42,18 +68,18 @@ struct PhotoCaptureView: View {
                 VStack {
                     HStack {
                         Button(action: {
-                            presentationMode.wrappedValue.dismiss()
+                            dismiss()
                         }) {
-                            HStack {
-                                Image(systemName: "xmark")
-                            }
-                            .modifier(BoxBlankStyle(cornerRadius: .infinity))
+                            Image(systemName: "xmark")
+                                .cameraIconStyle()
                         }
                         
                         Spacer()
                         
                        
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                     Spacer()
                     HStack(alignment: .center) {
                         Spacer()
@@ -84,7 +110,7 @@ struct PhotoCaptureView: View {
                     isGridOn.toggle()
                 }) {
                     Image(systemName: isGridOn ? "square.grid.3x3.fill" : "square.grid.3x3")
-                        .modifier(BoxBlankStyle(cornerRadius: .infinity))
+                        .cameraIconStyle()
                 }
                 
                 Spacer()
@@ -92,10 +118,8 @@ struct PhotoCaptureView: View {
                 Button(action: {
                     isFlashOn.toggle()
                 }) {
-                    HStack {
-                        Image(systemName: isFlashOn ? "bolt.fill" : "bolt")
-                    }
-                    .modifier(BoxBlankStyle(cornerRadius: .infinity))
+                    Image(systemName: isFlashOn ? "bolt.fill" : "bolt")
+                        .cameraIconStyle()
                 }
                 
                 Spacer()
@@ -104,9 +128,11 @@ struct PhotoCaptureView: View {
                     NotificationCenter.default.post(name: .switchCamera, object: nil)
                 }) {
                     Image(systemName: "camera.rotate")
-                        .modifier(BoxBlankStyle(cornerRadius: .infinity))
+                        .cameraIconStyle()
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
             
             Spacer()
         }
@@ -117,6 +143,21 @@ struct PhotoCaptureView: View {
             }
         }
         .padding(.top)
+        .offset(y: dragOffsetY)
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    // only track downward drags to avoid conflict with other gestures
+                    dragOffsetY = max(0, value.translation.height)
+                }
+                .onEnded { _ in
+                    if dragOffsetY > 120 {
+                        dismiss()
+                    }
+                    dragOffsetY = 0
+                }
+        )
+        .tint(.primary)
     }
 }
 

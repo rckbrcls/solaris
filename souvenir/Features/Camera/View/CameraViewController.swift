@@ -6,6 +6,7 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     var captureSession: AVCaptureSession?
     var photoOutput: AVCapturePhotoOutput?
     var previewLayer: AVCaptureVideoPreviewLayer?
+    private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     var capturedImage: Binding<UIImage?> = .constant(nil)
     var isPhotoTaken: Binding<Bool> = .constant(false)
     var isFlashOn: Binding<Bool> = .constant(false)
@@ -15,22 +16,29 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        // ...existing code...
+        // Configure capture session on a dedicated queue
         captureSession = AVCaptureSession()
         captureSession?.sessionPreset = .hd1920x1080
-        
-        guard let videoCaptureDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-              let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice) else { return }
-        
-        if captureSession?.canAddInput(videoInput) == true {
-            captureSession?.addInput(videoInput)
+
+        sessionQueue.async { [weak self] in
+            guard let self = self, let session = self.captureSession else { return }
+            guard let videoCaptureDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                  let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice) else { return }
+
+            if session.canAddInput(videoInput) {
+                session.addInput(videoInput)
+            }
+
+            let photoOutput = AVCapturePhotoOutput()
+            if session.canAddOutput(photoOutput) {
+                session.addOutput(photoOutput)
+                DispatchQueue.main.async { self.photoOutput = photoOutput }
+            }
+
+            session.startRunning()
         }
-        
-        photoOutput = AVCapturePhotoOutput()
-        if let cs = captureSession, let po = photoOutput, cs.canAddOutput(po) {
-            cs.addOutput(po)
-        }
-        
+
+        // Setup preview on main thread
         if let cs = captureSession {
             previewLayer = AVCaptureVideoPreviewLayer(session: cs)
             previewLayer?.videoGravity = .resizeAspect
@@ -54,9 +62,7 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(capturePhoto), name: .capturePhoto, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(switchCamera), name: .switchCamera, object: nil)
         
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.captureSession?.startRunning()
-        }
+        // startRunning already called on sessionQueue
     }
     
     override func viewDidLayoutSubviews() {
@@ -94,91 +100,102 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     }
     
     func updateZoomFactor() {
-        guard let currentInput = captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
-        let device = currentInput.device
-        do {
-            try device.lockForConfiguration()
-            // Clamp the zoom factor between 0.5 and 5.0, but also respect the device's maximum zoom factor
-            let desiredZoom = min(max(zoomFactor.wrappedValue, 0.5), min(5.0, device.activeFormat.videoMaxZoomFactor))
-            device.videoZoomFactor = desiredZoom
-            device.unlockForConfiguration()
-        } catch {
-            print("Error setting zoom factor: \(error)")
+        let desiredZoom = zoomFactor.wrappedValue
+        sessionQueue.async { [weak self] in
+            guard let self = self, let currentInput = self.captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
+            let device = currentInput.device
+            do {
+                try device.lockForConfiguration()
+                let clamped = min(max(desiredZoom, 0.5), min(5.0, device.activeFormat.videoMaxZoomFactor))
+                device.videoZoomFactor = clamped
+                device.unlockForConfiguration()
+            } catch {
+                print("Error setting zoom factor: \(error)")
+            }
         }
     }
     
     @objc func handlePinchGesture(_ gesture: UIPinchGestureRecognizer) {
-        guard let currentInput = captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
-        let device = currentInput.device
-        do {
-            try device.lockForConfiguration()
-            let maxZoom = device.activeFormat.videoMaxZoomFactor
-            let desiredZoomFactor = min(max(device.videoZoomFactor * gesture.scale, 1.0), maxZoom)
-            device.videoZoomFactor = desiredZoomFactor
-            device.unlockForConfiguration()
-            gesture.scale = 1.0
-        } catch {
-            print("Error setting zoom factor")
+        let scale = gesture.scale
+        sessionQueue.async { [weak self] in
+            guard let self = self, let currentInput = self.captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
+            let device = currentInput.device
+            do {
+                try device.lockForConfiguration()
+                let maxZoom = device.activeFormat.videoMaxZoomFactor
+                let desiredZoomFactor = min(max(device.videoZoomFactor * scale, 1.0), maxZoom)
+                device.videoZoomFactor = desiredZoomFactor
+                device.unlockForConfiguration()
+            } catch {
+                print("Error setting zoom factor")
+            }
+            DispatchQueue.main.async { gesture.scale = 1.0 }
         }
     }
     
     @objc func handleTapGesture(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: view)
-        guard let currentInput = captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
-        let device = currentInput.device
         let focusPoint = CGPoint(x: location.y / view.bounds.height, y: 1.0 - (location.x / view.bounds.width))
-        
-        if device.isFocusPointOfInterestSupported && device.isExposurePointOfInterestSupported {
-            do {
-                try device.lockForConfiguration()
-                device.focusPointOfInterest = focusPoint
-                device.focusMode = .autoFocus
-                device.exposurePointOfInterest = focusPoint
-                device.exposureMode = .autoExpose
-                device.unlockForConfiguration()
-            } catch {
-                print("Error setting focus")
-            }
-            
-            let focusRect = CGRect(x: location.x - 50, y: location.y - 50, width: 100, height: 100)
-            let focusIndicator = UIView(frame: focusRect)
-            focusIndicator.layer.borderColor = UIColor.yellow.cgColor
-            focusIndicator.layer.borderWidth = 2.0
-            focusIndicator.backgroundColor = UIColor.clear
-            view.addSubview(focusIndicator)
-            UIView.animate(withDuration: 1.0, animations: {
-                focusIndicator.alpha = 0
-            }) { _ in
-                focusIndicator.removeFromSuperview()
+        sessionQueue.async { [weak self] in
+            guard let self = self, let currentInput = self.captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
+            let device = currentInput.device
+            if device.isFocusPointOfInterestSupported && device.isExposurePointOfInterestSupported {
+                do {
+                    try device.lockForConfiguration()
+                    device.focusPointOfInterest = focusPoint
+                    device.focusMode = .autoFocus
+                    device.exposurePointOfInterest = focusPoint
+                    device.exposureMode = .autoExpose
+                    device.unlockForConfiguration()
+                } catch {
+                    print("Error setting focus")
+                }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    let focusRect = CGRect(x: location.x - 50, y: location.y - 50, width: 100, height: 100)
+                    let focusIndicator = UIView(frame: focusRect)
+                    focusIndicator.layer.borderColor = UIColor.yellow.cgColor
+                    focusIndicator.layer.borderWidth = 2.0
+                    focusIndicator.backgroundColor = UIColor.clear
+                    self.view.addSubview(focusIndicator)
+                    UIView.animate(withDuration: 1.0, animations: {
+                        focusIndicator.alpha = 0
+                    }) { _ in
+                        focusIndicator.removeFromSuperview()
+                    }
+                }
             }
         }
     }
     
     @objc func switchCamera() {
-        guard let currentInput = captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
-        captureSession?.beginConfiguration()
-        captureSession?.removeInput(currentInput)
-        
-        currentCameraPosition = (currentCameraPosition == .back) ? .front : .back
-        
-        guard let cs = captureSession,
-              let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentCameraPosition),
-              let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
-            captureSession?.addInput(currentInput)
-            captureSession?.commitConfiguration()
-            return
+        sessionQueue.async { [weak self] in
+            guard let self = self, let cs = self.captureSession, let currentInput = cs.inputs.first as? AVCaptureDeviceInput else { return }
+            cs.beginConfiguration()
+            cs.removeInput(currentInput)
+
+            self.currentCameraPosition = (self.currentCameraPosition == .back) ? .front : .back
+
+            guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: self.currentCameraPosition),
+                  let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
+                cs.addInput(currentInput)
+                cs.commitConfiguration()
+                return
+            }
+            if cs.canAddInput(newInput) {
+                cs.addInput(newInput)
+            } else {
+                cs.addInput(currentInput)
+            }
+            cs.commitConfiguration()
         }
-        if cs.canAddInput(newInput) {
-            cs.addInput(newInput)
-        } else {
-            cs.addInput(currentInput)
-        }
-        cs.commitConfiguration()
     }
     
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        captureSession?.stopRunning()
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        sessionQueue.async { [weak self] in
+            self?.captureSession?.stopRunning()
+        }
         NotificationCenter.default.removeObserver(self, name: .capturePhoto, object: nil)
         NotificationCenter.default.removeObserver(self, name: .switchCamera, object: nil)
     }

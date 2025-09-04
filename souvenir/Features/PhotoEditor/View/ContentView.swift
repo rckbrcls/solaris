@@ -106,7 +106,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationDestination(isPresented: $showCamera) {
+            .fullScreenCover(isPresented: $showCamera) {
                 PhotoCaptureView(onPhotoCaptured: { photo in
                     busyTitle = "Salvando foto..."
                     isBusy = true
@@ -142,12 +142,6 @@ struct ContentView: View {
                         }
                     }
                 })
-                .navigationTransition(
-                    .zoom(
-                        sourceID: "camera",
-                        in: ns
-                    )
-                )
             }
             .navigationDestination(isPresented: Binding<Bool>(
                 get: { selectedPhotoForEditor != nil },
