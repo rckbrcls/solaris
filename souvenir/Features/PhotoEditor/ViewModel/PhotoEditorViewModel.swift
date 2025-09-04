@@ -36,8 +36,10 @@ struct PhotoEditState: Codable, Equatable {
 class PhotoEditorViewModel: ObservableObject {
     @Published var previewImage: UIImage?
     @Published var editState = PhotoEditState()
+    @Published var lastUndoMessage: String? = nil
     // Simple undo stack of edit states (one per user transaction)
     private(set) var undoStack: [PhotoEditState] = []
+    var canUndo: Bool { !undoStack.isEmpty }
     private var inChangeTransaction: Bool = false
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
@@ -135,12 +137,67 @@ class PhotoEditorViewModel: ObservableObject {
 
     func undoLastChange() {
         guard let previous = undoStack.popLast() else { return }
+        let current = editState
         editState = previous
+        // Build a human-readable message of what changed back
+        let keys = diffChangedKeys(from: current, to: previous)
+        lastUndoMessage = buildUndoMessage(fromKeys: keys)
     }
 
     func resetAllEditsToClean() {
         undoStack.removeAll()
         editState = PhotoEditState()
+        lastUndoMessage = "Revertido: todos os ajustes"
+    }
+
+    func clearLastUndoMessage() { lastUndoMessage = nil }
+
+    // MARK: - Diff helpers
+    private func diffChangedKeys(from a: PhotoEditState, to b: PhotoEditState) -> [String] {
+        var keys: [String] = []
+        func changed(_ x: Float, _ y: Float, eps: Float = 0.0001) -> Bool { abs(x - y) > eps }
+        func colorChanged(_ c1: SIMD4<Float>, _ c2: SIMD4<Float>) -> Bool {
+            changed(c1.x, c2.x) || changed(c1.y, c2.y) || changed(c1.z, c2.z) || changed(c1.w, c2.w)
+        }
+        if changed(a.contrast, b.contrast) { keys.append("contrast") }
+        if changed(a.brightness, b.brightness) { keys.append("brightness") }
+        if changed(a.exposure, b.exposure) { keys.append("exposure") }
+        if changed(a.saturation, b.saturation) { keys.append("saturation") }
+        if changed(a.vibrance, b.vibrance) { keys.append("vibrance") }
+        if changed(a.opacity, b.opacity) { keys.append("opacity") }
+        if changed(a.colorInvert, b.colorInvert) { keys.append("colorInvert") }
+        if changed(a.pixelateAmount, b.pixelateAmount) { keys.append("pixelateAmount") }
+        if colorChanged(a.colorTint, b.colorTint) { keys.append("colorTint") }
+        if colorChanged(a.colorTintSecondary, b.colorTintSecondary) { keys.append("colorTintSecondary") }
+        if changed(a.colorTintIntensity, b.colorTintIntensity) { keys.append("colorTintIntensity") }
+        if changed(a.colorTintFactor, b.colorTintFactor) { keys.append("colorTintFactor") }
+        if a.isDualToneActive != b.isDualToneActive { keys.append("isDualToneActive") }
+        return keys
+    }
+
+    private func buildUndoMessage(fromKeys keys: [String]) -> String {
+        if keys.isEmpty { return "Nada para desfazer" }
+        let names: [String: String] = [
+            "contrast": "Contraste",
+            "brightness": "Brilho",
+            "exposure": "Exposição",
+            "saturation": "Saturação",
+            "vibrance": "Vibrance",
+            "opacity": "Opacidade",
+            "colorInvert": "Inverter",
+            "pixelateAmount": "Pixelizar",
+            "colorTint": "Tint",
+            "colorTintSecondary": "Tint Secundário",
+            "colorTintIntensity": "Intensidade do Tint",
+            "colorTintFactor": "Força do Tint",
+            "isDualToneActive": "Dual Tone"
+        ]
+        if keys.count == 1 {
+            return "Revertido: \(names[keys[0]] ?? keys[0])"
+        }
+        let firstTwo = keys.prefix(2).compactMap { names[$0] ?? $0 }.joined(separator: ", ")
+        let rest = keys.count - 2
+        return rest > 0 ? "Revertido: \(firstTwo) +\(rest)" : "Revertido: \(firstTwo)"
     }
 
     /// Gera a imagem final em alta qualidade com todos os ajustes aplicados

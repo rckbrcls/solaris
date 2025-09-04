@@ -1,6 +1,22 @@
 import SwiftUI
 import UIKit
 
+// PreferenceKey para medir a altura do painel de ajustes
+private struct EditorAdjustmentsHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// PreferenceKey para medir a altura da área da imagem
+private struct EditorImageHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 // Circular neutral icon style (match camera buttons)
 private struct EditorIconButtonStyle: ViewModifier {
     var size: CGFloat = 44
@@ -42,6 +58,9 @@ struct PhotoEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showSaveDiscardModal = false
     @State private var hasChanges = false
+    @State private var showUndoToast = false
+    @State private var adjustmentsHeight: CGFloat = 0
+    @State private var imageHeight: CGFloat = 0
 
     private var initialEditState: PhotoEditState
 
@@ -57,16 +76,45 @@ struct PhotoEditorView: View {
         ZStack {
             GeometryReader { geometry in
                 VStack(spacing: 0) {
-                    PhotoEditorMainImage(
-                        // Show the original image when there are no filters applied yet,
-                        // so the initial view is always full-quality.
-                        image: Binding(get: { viewModel.originalImage }, set: { _ in }),
-                        filteredImage: $viewModel.previewImage,
-                        matchedID: matchedID,
-                        namespace: namespace,
-                        zoomScale: $zoomScale,
-                        lastZoomScale: $lastZoomScale
-                    )
+                    ZStack(alignment: .bottom) {
+                        PhotoEditorMainImage(
+                            // Show the original image when there are no filters applied yet,
+                            // so the initial view is always full-quality.
+                            image: Binding(get: { viewModel.originalImage }, set: { _ in }),
+                            filteredImage: $viewModel.previewImage,
+                            matchedID: matchedID,
+                            namespace: namespace,
+                            zoomScale: $zoomScale,
+                            lastZoomScale: $lastZoomScale
+                        )
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(key: EditorImageHeightKey.self, value: proxy.size.height)
+                            }
+                        )
+
+                        if showUndoToast, let msg = viewModel.lastUndoMessage {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .foregroundColor(.primary)
+                                Text(msg)
+                                    .font(.footnote.bold())
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay(Capsule().stroke(Color.primary.opacity(0.15), lineWidth: 1))
+                            .shadow(radius: 3)
+                            .padding(.bottom, 8)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .scale(scale: 0.9).combined(with: .opacity),
+                                    removal: .opacity
+                                )
+                            )
+                        }
+                    }
                     VStack{
                         ZStack {
                             switch selectedCategory {
@@ -109,9 +157,16 @@ struct PhotoEditorView: View {
                     // Painel inferior usa cor de fundo que contrasta com o texto primário
                     .background(colorSchemeManager.secondaryColor)
                     .padding(.bottom, geometry.safeAreaInsets.bottom)
+                    // Medir altura do painel de ajustes para posicionar o toast acima dele
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: EditorAdjustmentsHeightKey.self, value: proxy.size.height + geometry.safeAreaInsets.bottom)
+                        }
+                    )
                 }
             }
             LoadingOverlay(isVisible: $isSaving, title: "Salvando edição...")
+            // toast agora é renderizado dentro da área da imagem
             // Top controls (match camera style)
             VStack {
                 HStack {
@@ -131,7 +186,12 @@ struct PhotoEditorView: View {
                         // Tap: desfaz apenas a última alteração registrada
                         let gen = UIImpactFeedbackGenerator(style: .light)
                         gen.impactOccurred()
-                        viewModel.undoLastChange()
+                        if viewModel.canUndo {
+                            viewModel.undoLastChange()
+                        } else {
+                            // Sem histórico (p.ex. após reabrir pós-salvar): fallback para reset limpo
+                            viewModel.resetAllEditsToClean()
+                        }
                     }) {
                         Image(systemName: "arrow.uturn.backward")
                             .editorIconStyle()
@@ -184,6 +244,22 @@ struct PhotoEditorView: View {
         }
         .onChange(of: viewModel.editState) { newValue in
             hasChanges = (newValue != initialEditState)
+        }
+        .onPreferenceChange(EditorAdjustmentsHeightKey.self) { h in
+            adjustmentsHeight = h
+        }
+        .onPreferenceChange(EditorImageHeightKey.self) { h in
+            imageHeight = h
+        }
+        .onChange(of: viewModel.lastUndoMessage) { msg in
+            guard msg != nil else { return }
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { showUndoToast = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                withAnimation(.easeOut(duration: 0.4)) { showUndoToast = false }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    viewModel.clearLastUndoMessage()
+                }
+            }
         }
         .toolbar { } // remove default toolbar items
     }
