@@ -189,9 +189,11 @@ struct PhotoEditorView: View {
                         gen.impactOccurred()
                         if viewModel.canUndo {
                             viewModel.undoLastChange()
-                        } else {
-                            // Sem histórico (p.ex. após reabrir pós-salvar): fallback para reset limpo
+                        } else if viewModel.editState != PhotoEditState() {
+                            // Sem histórico (ex.: nova sessão), mas há alterações: reset limpo
                             viewModel.resetAllEditsToClean()
+                        } else {
+                            // Nada a desfazer: não mostrar toast indevido
                         }
                     }) {
                         Image(systemName: "arrow.uturn.backward")

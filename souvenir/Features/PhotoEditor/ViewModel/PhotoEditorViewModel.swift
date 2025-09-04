@@ -146,8 +146,14 @@ class PhotoEditorViewModel: ObservableObject {
 
     func resetAllEditsToClean() {
         undoStack.removeAll()
-        editState = PhotoEditState()
-        lastUndoMessage = "Revertido: todos os ajustes"
+        let clean = PhotoEditState()
+        if editState != clean {
+            editState = clean
+            lastUndoMessage = "Revertido: todos os ajustes"
+        } else {
+            // Nada a desfazer; não mostrar toast indevido
+            lastUndoMessage = nil
+        }
     }
 
     func clearLastUndoMessage() { lastUndoMessage = nil }
