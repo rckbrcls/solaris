@@ -39,7 +39,9 @@ class PhotoEditorViewModel: ObservableObject {
     @Published var lastUndoMessage: String? = nil
     // Simple undo stack of edit states (one per user transaction)
     private(set) var undoStack: [PhotoEditState] = []
+    private(set) var redoStack: [PhotoEditState] = []
     var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
     private var inChangeTransaction: Bool = false
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
@@ -122,6 +124,8 @@ class PhotoEditorViewModel: ObservableObject {
     func beginChangeTransaction() {
         if !inChangeTransaction {
             undoStack.append(editState)
+            // New transaction invalidates redo history
+            redoStack.removeAll()
             inChangeTransaction = true
         }
     }
@@ -133,11 +137,15 @@ class PhotoEditorViewModel: ObservableObject {
     func registerUndoPoint() {
         // for discrete changes (button taps)
         undoStack.append(editState)
+        // Any new change invalidates redo history
+        redoStack.removeAll()
     }
 
     func undoLastChange() {
         guard let previous = undoStack.popLast() else { return }
         let current = editState
+        // push current state to redo stack so we can restore later
+        redoStack.append(current)
         editState = previous
         // Build a human-readable message of what changed back
         let keys = diffChangedKeys(from: current, to: previous)
@@ -146,6 +154,7 @@ class PhotoEditorViewModel: ObservableObject {
 
     func resetAllEditsToClean() {
         undoStack.removeAll()
+        redoStack.removeAll()
         let clean = PhotoEditState()
         if editState != clean {
             editState = clean
@@ -204,6 +213,54 @@ class PhotoEditorViewModel: ObservableObject {
         let firstTwo = keys.prefix(2).compactMap { names[$0] ?? $0 }.joined(separator: ", ")
         let rest = keys.count - 2
         return rest > 0 ? "Revertido: \(firstTwo) +\(rest)" : "Revertido: \(firstTwo)"
+    }
+
+    private func buildRestoreMessage(fromKeys keys: [String]) -> String {
+        if keys.isEmpty { return "Nada para restaurar" }
+        let names: [String: String] = [
+            "contrast": "Contraste",
+            "brightness": "Brilho",
+            "exposure": "Exposição",
+            "saturation": "Saturação",
+            "vibrance": "Vibrance",
+            "opacity": "Opacidade",
+            "colorInvert": "Inverter",
+            "pixelateAmount": "Pixelizar",
+            "colorTint": "Tint",
+            "colorTintSecondary": "Tint Secundário",
+            "colorTintIntensity": "Intensidade do Tint",
+            "colorTintFactor": "Força do Tint",
+            "isDualToneActive": "Dual Tone"
+        ]
+        if keys.count == 1 {
+            return "Restaurado: \(names[keys[0]] ?? keys[0])"
+        }
+        let firstTwo = keys.prefix(2).compactMap { names[$0] ?? $0 }.joined(separator: ", ")
+        let rest = keys.count - 2
+        return rest > 0 ? "Restaurado: \(firstTwo) +\(rest)" : "Restaurado: \(firstTwo)"
+    }
+
+    func redoLastChange() {
+        guard let next = redoStack.popLast() else { return }
+        let current = editState
+        // current becomes another undo point
+        undoStack.append(current)
+        editState = next
+        let keys = diffChangedKeys(from: current, to: next)
+        lastUndoMessage = buildRestoreMessage(fromKeys: keys)
+    }
+
+    func redoAllChanges() {
+        guard !redoStack.isEmpty else { return }
+        var current = editState
+        var latest = current
+        while let next = redoStack.popLast() {
+            undoStack.append(current)
+            current = next
+            latest = next
+        }
+        editState = latest
+        lastUndoMessage = "Restaurado: todos os ajustes"
     }
 
     /// Gera a imagem final em alta qualidade com todos os ajustes aplicados

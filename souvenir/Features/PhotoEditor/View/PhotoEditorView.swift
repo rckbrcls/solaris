@@ -213,6 +213,30 @@ struct PhotoEditorView: View {
                                 }
                             }
                     )
+                    Button(action: {
+                        // Tap: refaz apenas a última alteração desfeita
+                        let gen = UIImpactFeedbackGenerator(style: .light)
+                        gen.impactOccurred()
+                        if viewModel.canRedo {
+                            viewModel.redoLastChange()
+                        } else {
+                            // Nada a restaurar
+                        }
+                    }) {
+                        Image(systemName: "arrow.uturn.forward")
+                            .editorIconStyle()
+                    }
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5)
+                            .onEnded { _ in
+                                // Long press: re-aplica todos os ajustes desfeitos
+                                let gen = UIImpactFeedbackGenerator(style: .heavy)
+                                gen.impactOccurred()
+                                if viewModel.canRedo {
+                                    viewModel.redoAllChanges()
+                                }
+                            }
+                    )
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
