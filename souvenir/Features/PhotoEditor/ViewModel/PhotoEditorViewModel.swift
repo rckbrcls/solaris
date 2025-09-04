@@ -25,7 +25,7 @@ struct PhotoEditState: Codable, Equatable {
     // Color tint (RGBA, valores de 0 a 1)
     var colorTint: SIMD4<Float> = SIMD4<Float>(0,0,0,0) // padrão: sem cor
     var colorTintIntensity: Float = 1.0 // valor médio para que o slider fique no meio
-    var colorTintFactor: Float = 0.25 // força do viés de cor (ColorMatrix) - inicia em 25
+    var colorTintFactor: Float = 0.30 // força do viés de cor (ColorMatrix) - default 30%
     // Dual tone support
     var colorTintSecondary: SIMD4<Float> = SIMD4<Float>(0,0,0,0) // segunda cor para dual tone
     var isDualToneActive: Bool = false // indica se o dual tone está ativo

@@ -22,7 +22,8 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         super.viewDidLoad()
         // Configure capture session on a dedicated queue
         captureSession = AVCaptureSession()
-        captureSession?.sessionPreset = .hd1920x1080
+        // Highest quality for still photos
+        captureSession?.sessionPreset = .photo
 
         sessionQueue.async { [weak self] in
             guard let self = self, let session = self.captureSession else { return }
@@ -34,6 +35,10 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
             }
 
             let photoOutput = AVCapturePhotoOutput()
+            photoOutput.isHighResolutionCaptureEnabled = true
+            if #available(iOS 15.0, *) {
+                photoOutput.maxPhotoQualityPrioritization = .quality
+            }
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
                 DispatchQueue.main.async { self.photoOutput = photoOutput }
@@ -96,6 +101,10 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     
     @objc func capturePhoto() {
         let settings = AVCapturePhotoSettings()
+        settings.isHighResolutionPhotoEnabled = true
+        if #available(iOS 15.0, *) {
+            settings.photoQualityPrioritization = .quality
+        }
         if isFlashOn.wrappedValue {
             settings.flashMode = .on
         } else {

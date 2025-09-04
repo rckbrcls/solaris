@@ -549,19 +549,22 @@ private struct ColorTintControls: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
-            RulerSlider(
-                value: Binding(
-                    get: { uiFromFactor(colorTintFactor) },
-                    set: { colorTintFactor = factorFromUI($0) }
-                ),
-                range: 0...100,
-                step: 1.0,
-                totalTicks: 101,
-                majorTickEvery: 10,
-                format: { String(format: "%d", Int($0)) },
-                onEditingBegan: onBeginAdjust,
-                onEditingEnded: onEndAdjust
-            )
+            if colorTint.w > 0.0 || isDualToneActive {
+                RulerSlider(
+                    value: Binding(
+                        get: { uiFromFactor(colorTintFactor) },
+                        set: { colorTintFactor = factorFromUI($0) }
+                    ),
+                    range: 0...100,
+                    step: 1.0,
+                    totalTicks: 101,
+                    majorTickEvery: 10,
+                    format: { String(format: "%d", Int($0)) },
+                    onEditingBegan: onBeginAdjust,
+                    onEditingEnded: onEndAdjust
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
     }
 }
