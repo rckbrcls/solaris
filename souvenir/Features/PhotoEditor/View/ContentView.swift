@@ -20,7 +20,13 @@ func exportUIImageAsHEIC(_ image: UIImage) -> Data? {
 
 struct ContentView: View {
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
-    @State private var isImporting: Bool = false
+    // HUD de carregamento unificado
+    @State private var isBusy: Bool = false
+    @State private var busyTitle: String = ""
+    @State private var showSettings: Bool = false
+    @State private var showRawChoiceDialog: Bool = false
+    @State private var batchRawHandling: RawHandlingChoice? = nil
+    @State private var pendingImportItems: [PhotosPickerItem] = []
     struct StoredPhoto: Codable {
         let url: URL
         let data: Data
@@ -47,7 +53,7 @@ struct ContentView: View {
             data = try container.decode(Data.self, forKey: .data)
             originalData = (try? container.decode(Data.self, forKey: .originalData)) ?? data
             editState = try container.decodeIfPresent(PhotoEditState.self, forKey: .editState)
-            image = loadUIImageFullQuality(from: data) ?? UIImage()
+            image = loadUIImageThumbnail(from: data, maxPixel: 512) ?? UIImage()
         }
 
         func encode(to encoder: Encoder) throws {
@@ -102,108 +108,58 @@ struct ContentView: View {
                     }
                 }
 
-                if isImporting {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                    ProgressView("Importando fotos...")
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .foregroundColor(.white)
-                        .padding(40)
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(16)
-                }
+                LoadingOverlay(isVisible: $isBusy, title: busyTitle)
             }
             .onChange(of: selectedItems) { _, newItems in
-                isImporting = true
-                DispatchQueue.global(qos: .userInitiated).async {
-                    var importedPhotos: [StoredPhoto] = []
-                    let storageDir = getPhotoStorageDir()
-                    try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
-                    let group = DispatchGroup()
-                    for item in newItems {
-                        group.enter()
-                        Task {
-                            if let data = try? await item.loadTransferable(type: Data.self) {
-                                if let img = loadUIImageFullQuality(from: data) {
-                                    let ext = detectImageExtension(data: data)
-                                    let filename: String
-                                    let url: URL
-                                    var outData: Data? = nil
-                                    var outExt: String = ext
-                                    switch ext {
-                                    case "heic":
-                                        if let heicData = exportUIImageAsHEIC(img) {
-                                            outData = heicData
-                                            outExt = "heic"
-                                        }
-                                    case "jpg":
-                                        if let jpgData = img.jpegData(compressionQuality: 1.0) {
-                                            outData = jpgData
-                                            outExt = "jpg"
-                                        }
-                                    case "png":
-                                        if let pngData = img.pngData() {
-                                            outData = pngData
-                                            outExt = "png"
-                                        }
-                                    default:
-                                        // fallback para PNG
-                                        if let pngData = img.pngData() {
-                                            outData = pngData
-                                            outExt = "png"
-                                        }
-                                    }
-                                    filename = "photo_\(UUID().uuidString).\(outExt)"
-                                    url = storageDir.appendingPathComponent(filename)
-                                    do {
-                                        if let outData {
-                                            try outData.write(to: url)
-                                            importedPhotos.append(StoredPhoto(url: url, data: outData, image: img, originalData: outData))
-                                        }
-                                    } catch {
-                                        print("[Import] Falha ao salvar imagem em: \(url.path)")
-                                    }
-                                }
-                            }
-                            group.leave()
-                        }
-                    }
-                    group.notify(queue: .main) {
-                        if !importedPhotos.isEmpty {
-                            photos.append(contentsOf: importedPhotos)
-                            savePhotos()
-                        }
-                        selectedItems.removeAll()
-                        isImporting = false
-                    }
+                pendingImportItems = newItems
+                if AppSettings.shared.rawHandlingDefault == .ask {
+                    showRawChoiceDialog = true
+                } else {
+                    batchRawHandling = AppSettings.shared.rawHandlingDefault
+                    processImport(items: newItems, rawHandling: batchRawHandling!)
                 }
             }
             .onAppear {
-                loadPhotos()
+                busyTitle = "Carregando fotos..."
+                isBusy = true
+                DispatchQueue.global(qos: .userInitiated).async {
+                    loadPhotos()
+                    DispatchQueue.main.async { isBusy = false }
+                }
             }
             .navigationDestination(isPresented: $showCamera) {
                 PhotoCaptureView(onPhotoCaptured: { photo in
-                    let orientationFixedPhoto = photo.fixOrientation()
-                    // Tenta salvar como HEIC, depois JPG, depois PNG
-                    var data: Data? = nil
-                    var ext: String = "heic"
-                    if let heicData = exportUIImageAsHEIC(orientationFixedPhoto) {
-                        data = heicData
-                        ext = "heic"
-                    } else if let jpgData = orientationFixedPhoto.jpegData(compressionQuality: 1.0) {
-                        data = jpgData
-                        ext = "jpg"
-                    } else if let pngData = orientationFixedPhoto.pngData() {
-                        data = pngData
-                        ext = "png"
-                    }
-                    if let data {
-                        let filename = "photo_\(UUID().uuidString).\(ext)"
-                        let url = getPhotoStorageDir().appendingPathComponent(filename)
-                        try? FileManager.default.createDirectory(at: getPhotoStorageDir(), withIntermediateDirectories: true)
-                        try? data.write(to: url)
-                        photos.append(StoredPhoto(url: url, data: data, image: orientationFixedPhoto, originalData: data))
-                        savePhotos()
+                    busyTitle = "Salvando foto..."
+                    isBusy = true
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let orientationFixedPhoto = photo.fixOrientation()
+                        // Tenta salvar como HEIC, depois JPG, depois PNG
+                        var data: Data? = nil
+                        var ext: String = "heic"
+                        if let heicData = exportUIImageAsHEIC(orientationFixedPhoto) {
+                            data = heicData
+                            ext = "heic"
+                        } else if let jpgData = orientationFixedPhoto.jpegData(compressionQuality: 1.0) {
+                            data = jpgData
+                            ext = "jpg"
+                        } else if let pngData = orientationFixedPhoto.pngData() {
+                            data = pngData
+                            ext = "png"
+                        }
+                        if let data {
+                            let filename = "photo_\(UUID().uuidString).\(ext)"
+                            let url = getPhotoStorageDir().appendingPathComponent(filename)
+                            try? FileManager.default.createDirectory(at: getPhotoStorageDir(), withIntermediateDirectories: true)
+                            try? data.write(to: url)
+                            DispatchQueue.main.async {
+                                let thumb = loadUIImageThumbnail(from: data, maxPixel: 512) ?? orientationFixedPhoto
+                                photos.append(StoredPhoto(url: url, data: data, image: thumb, originalData: data))
+                                savePhotos()
+                                isBusy = false
+                            }
+                        } else {
+                            DispatchQueue.main.async { isBusy = false }
+                        }
                     }
                 })
                 .navigationTransition(
@@ -223,28 +179,36 @@ struct ContentView: View {
                     let originalImage = loadUIImageFullQuality(from: stored.originalData) ?? stored.image
                     PhotoEditorView(photo: originalImage, namespace: ns, matchedID: "", initialEditState: initialEditState) { finalImage, editState, didSave in
                         if didSave, let finalImage, let editState {
-                            var data: Data? = nil
-                            var ext = "heic"
-                            if let heicData = exportUIImageAsHEIC(finalImage) {
-                                data = heicData
-                                ext = "heic"
-                            } else if let jpgData = finalImage.jpegData(compressionQuality: 1.0) {
-                                data = jpgData
-                                ext = "jpg"
-                            } else if let pngData = finalImage.pngData() {
-                                data = pngData
-                                ext = "png"
+                            busyTitle = "Salvando edição..."
+                            isBusy = true
+                            DispatchQueue.global(qos: .userInitiated).async {
+                                var data: Data? = nil
+                                var ext = "heic"
+                                if let heicData = exportUIImageAsHEIC(finalImage) {
+                                    data = heicData
+                                    ext = "heic"
+                                } else if let jpgData = finalImage.jpegData(compressionQuality: 1.0) {
+                                    data = jpgData
+                                    ext = "jpg"
+                                } else if let pngData = finalImage.pngData() {
+                                    data = pngData
+                                    ext = "png"
+                                }
+                                if let data {
+                                    let filename = "photo_\(UUID().uuidString).\(ext)"
+                                    let url = getPhotoStorageDir().appendingPathComponent(filename)
+                                    try? FileManager.default.createDirectory(at: getPhotoStorageDir(), withIntermediateDirectories: true)
+                                    try? data.write(to: url)
+                                    DispatchQueue.main.async {
+                                        let thumb = loadUIImageThumbnail(from: data, maxPixel: 512) ?? finalImage
+                                        photos[idx] = StoredPhoto(url: url, data: data, image: thumb, originalData: stored.originalData, editState: editState)
+                                        savePhotos()
+                                        isBusy = false
+                                    }
+                                } else {
+                                    DispatchQueue.main.async { isBusy = false }
+                                }
                             }
-                            if let data {
-                                let filename = "photo_\(UUID().uuidString).\(ext)"
-                                let url = getPhotoStorageDir().appendingPathComponent(filename)
-                                try? FileManager.default.createDirectory(at: getPhotoStorageDir(), withIntermediateDirectories: true)
-                                try? data.write(to: url)
-                                photos[idx] = StoredPhoto(url: url, data: data, image: finalImage, originalData: stored.originalData, editState: editState)
-                                savePhotos()
-                            }
-                        } else if !didSave {
-                            // Descartou alterações: não faz nada
                         }
                         selectedPhotoForEditor = nil
                         selectedPhotoIndex = nil
@@ -254,6 +218,33 @@ struct ContentView: View {
             }
         }
         .observeColorScheme()
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showSettings = true }) {
+                    Image(systemName: "gearshape")
+                }
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(AppSettings.shared)
+        }
+        .confirmationDialog("Importar RAW como?", isPresented: $showRawChoiceDialog, titleVisibility: .visible) {
+            Button("Otimizado", role: .none) {
+                batchRawHandling = .optimized
+                processImport(items: pendingImportItems, rawHandling: .optimized)
+            }
+            Button("Original (pode usar muita memória)", role: .destructive) {
+                batchRawHandling = .original
+                processImport(items: pendingImportItems, rawHandling: .original)
+            }
+            Button("Cancelar", role: .cancel) {
+                selectedItems.removeAll()
+                pendingImportItems.removeAll()
+            }
+        } message: {
+            Text("Para este lote de fotos RAW")
+        }
     }
 
     func navigateToPhotoEditor(photo: UIImage) {
@@ -280,12 +271,15 @@ struct ContentView: View {
     }
 
     func savePhotos() {
-        // Salva paths e ajustes
-        do {
-            let data = try JSONEncoder().encode(photos)
-            UserDefaults.standard.set(data, forKey: "savedPhotos")
-        } catch {
-            print("[savePhotos] Falha ao salvar fotos: \(error)")
+        // Snapshot no main e salva em background para não travar a UI
+        let snapshot = self.photos
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let data = try JSONEncoder().encode(snapshot)
+                UserDefaults.standard.set(data, forKey: "savedPhotos")
+            } catch {
+                print("[savePhotos] Falha ao salvar fotos: \(error)")
+            }
         }
     }
 
@@ -293,9 +287,79 @@ struct ContentView: View {
         if let data = UserDefaults.standard.data(forKey: "savedPhotos") {
             do {
                 let loaded = try JSONDecoder().decode([StoredPhoto].self, from: data)
-                photos = loaded
+                // Constrói thumbs leves para a grade
+                photos = loaded.map { stored in
+                    var s = stored
+                    if let thumb = loadUIImageThumbnail(from: s.data, maxPixel: 512) {
+                        s = StoredPhoto(url: s.url, data: s.data, image: thumb, originalData: s.originalData, editState: s.editState)
+                    }
+                    return s
+                }
             } catch {
                 print("[loadPhotos] Falha ao carregar fotos: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Import com política escolhida
+    func processImport(items: [PhotosPickerItem], rawHandling: RawHandlingChoice) {
+        busyTitle = "Importando fotos..."
+        isBusy = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            var importedPhotos: [StoredPhoto] = []
+            let storageDir = getPhotoStorageDir()
+            try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
+            let group = DispatchGroup()
+            for item in items {
+                group.enter()
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        autoreleasepool {
+                            let (isRaw, uti) = detectImageRawInfo(data: data)
+                            let gridThumb = loadUIImageThumbnail(from: data, maxPixel: 512) ?? UIImage()
+                            var storedURL: URL? = nil
+                            var storedData: Data? = nil
+                            if isRaw && rawHandling == .original {
+                                let ext = rawFileExtension(from: uti) ?? "raw"
+                                let filename = "photo_\(UUID().uuidString).\(ext)"
+                                let url = storageDir.appendingPathComponent(filename)
+                                do {
+                                    try data.write(to: url)
+                                    storedURL = url
+                                    storedData = data
+                                } catch {
+                                    print("[Import] Falha ao salvar RAW em: \(url.path)")
+                                }
+                            } else {
+                                if let img = loadUIImageWithHandling(from: data, handling: isRaw ? rawHandling : .optimized) {
+                                    let (encoded, ext) = encodeUIImageBestEffort(img)
+                                    let filename = "photo_\(UUID().uuidString).\(ext)"
+                                    let url = storageDir.appendingPathComponent(filename)
+                                    do {
+                                        try encoded.write(to: url)
+                                        storedURL = url
+                                        storedData = encoded
+                                    } catch {
+                                        print("[Import] Falha ao salvar imagem em: \(url.path)")
+                                    }
+                                }
+                            }
+                            if let url = storedURL, let sdata = storedData {
+                                importedPhotos.append(StoredPhoto(url: url, data: sdata, image: gridThumb, originalData: sdata))
+                            }
+                        }
+                    }
+                    group.leave()
+                }
+            }
+            group.notify(queue: .main) {
+                if !importedPhotos.isEmpty {
+                    photos.append(contentsOf: importedPhotos)
+                    savePhotos()
+                }
+                selectedItems.removeAll()
+                pendingImportItems.removeAll()
+                isBusy = false
             }
         }
     }
@@ -303,33 +367,72 @@ struct ContentView: View {
 
 // MARK: - Carregamento de imagem com máxima qualidade
 func loadUIImageFullQuality(from data: Data) -> UIImage? {
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+    let srcOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let source = CGImageSourceCreateWithData(data as CFData, srcOptions) else {
         return UIImage(data: data)
     }
 
-    // Opções para carregar a imagem já com a orientação EXIF aplicada
-    let options: [CFString: Any] = [
-        kCGImageSourceShouldAllowFloat: true,
-        kCGImageSourceCreateThumbnailFromImageAlways: false,
-        kCGImageSourceCreateThumbnailWithTransform: true,
-        kCGImageSourceShouldCacheImmediately: true
-    ]
-
-    // Pega a orientação EXIF
+    // Coleta metadados para decisão de downsampling
     let propertiesOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-    var orientation: UIImage.Orientation = .up
-    if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, propertiesOptions) as? [CFString: Any],
-       let exifOrientation = properties[kCGImagePropertyOrientation] as? UInt32 {
-        orientation = UIImage.Orientation(exifOrientation: exifOrientation)
-    }
+    let props = CGImageSourceCopyPropertiesAtIndex(source, 0, propertiesOptions) as? [CFString: Any]
+    let pixelWidth = (props?[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+    let pixelHeight = (props?[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+    let exifOrientation = (props?[kCGImagePropertyOrientation] as? UInt32) ?? 1
+    let typeId = CGImageSourceGetType(source)
 
-    guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, options as CFDictionary) else {
-        return UIImage(data: data)
-    }
+    // Heurística: identificar RAW
+    let isProbablyRAW: Bool = {
+        guard let typeId = typeId else { return false }
+        let uti = typeId as String
+        // Checagens comuns de RAW
+        let rawUTIs = [
+            "public.camera-raw-image",
+            "com.adobe.raw-image",
+            "com.canon.cr2-raw-image", "com.canon.cr3-raw-image",
+            "com.nikon.nrw-raw-image", "com.nikon.nef-raw-image",
+            "com.sony.arw-raw-image", "com.panasonic.rw2-raw-image",
+            "com.apple.raw-image", "com.fuji.raw-image", "com.olympus.orf-raw-image",
+            "com.adobe.dng"
+        ]
+        return rawUTIs.contains(uti)
+    }()
+
+    let maxSide = max(pixelWidth, pixelHeight)
+    // Consulta preferências do app
+    let settings = AppSettings.shared
+    let defaultHandling = settings.rawHandlingDefault
+    let cap = isProbablyRAW ? settings.maxRawLongestSide : settings.maxNonRawLongestSide
+    let effectiveHandling: RawHandlingChoice = (defaultHandling == .ask) ? .optimized : defaultHandling
+    let shouldDownsample: Bool = {
+        if effectiveHandling == .original { return false }
+        return maxSide > cap
+    }()
 
     let scale: CGFloat = UIScreen.main.scale
-    let image = UIImage(cgImage: cgImage, scale: scale, orientation: orientation)
-    // Garante que a orientação será .up para todo o app
+    if shouldDownsample {
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: cap,
+            kCGImageSourceShouldCacheImmediately: false,
+            kCGImageSourceShouldAllowFloat: false
+        ]
+        if let cgThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
+            // Já vem transformado (orientação correta). Evita passagens extras de draw.
+            return UIImage(cgImage: cgThumb, scale: scale, orientation: .up)
+        }
+        // Fallback: tenta caminho normal se thumbnail falhar
+    }
+
+    // Caminho padrão (não gigante): cria CGImage com orientação original e aplica depois
+    let createOpts: [CFString: Any] = [
+        kCGImageSourceShouldAllowFloat: true,
+        kCGImageSourceShouldCacheImmediately: false
+    ]
+    guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, createOpts as CFDictionary) else {
+        return UIImage(data: data)
+    }
+    let image = UIImage(cgImage: cgImage, scale: scale, orientation: UIImage.Orientation(exifOrientation: exifOrientation))
     return image.fixOrientation()
 }
 
@@ -364,4 +467,114 @@ func getPhotoStorageDir() -> URL {
 
 #Preview {
     ContentView()
+}
+
+// MARK: - Helpers de importação e thumbnails
+func detectImageRawInfo(data: Data) -> (Bool, String?) {
+    let srcOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let source = CGImageSourceCreateWithData(data as CFData, srcOptions) else { return (false, nil) }
+    guard let typeId = CGImageSourceGetType(source) else { return (false, nil) }
+    let uti = typeId as String
+    let rawUTIs: Set<String> = [
+        "public.camera-raw-image",
+        "com.adobe.raw-image",
+        "com.canon.cr2-raw-image", "com.canon.cr3-raw-image",
+        "com.nikon.nrw-raw-image", "com.nikon.nef-raw-image",
+        "com.sony.arw-raw-image", "com.panasonic.rw2-raw-image",
+        "com.apple.raw-image", "com.fuji.raw-image", "com.olympus.orf-raw-image",
+        "com.adobe.dng"
+    ]
+    return (rawUTIs.contains(uti), uti)
+}
+
+func rawFileExtension(from uti: String?) -> String? {
+    guard let uti else { return nil }
+    switch uti {
+    case "com.adobe.dng": return "dng"
+    case "com.canon.cr2-raw-image": return "cr2"
+    case "com.canon.cr3-raw-image": return "cr3"
+    case "com.nikon.nrw-raw-image": return "nrw"
+    case "com.nikon.nef-raw-image": return "nef"
+    case "com.sony.arw-raw-image": return "arw"
+    case "com.panasonic.rw2-raw-image": return "rw2"
+    case "com.olympus.orf-raw-image": return "orf"
+    case "public.camera-raw-image", "com.adobe.raw-image", "com.apple.raw-image", "com.fuji.raw-image": return "raw"
+    default: return nil
+    }
+}
+
+func loadUIImageThumbnail(from data: Data, maxPixel: Int) -> UIImage? {
+    let srcOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let source = CGImageSourceCreateWithData(data as CFData, srcOptions) else { return nil }
+    let opts: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        kCGImageSourceShouldCacheImmediately: false
+    ]
+    if let cgThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
+        return UIImage(cgImage: cgThumb, scale: UIScreen.main.scale, orientation: .up)
+    }
+    return nil
+}
+
+func loadUIImageWithHandling(from data: Data, handling: RawHandlingChoice) -> UIImage? {
+    let srcOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let source = CGImageSourceCreateWithData(data as CFData, srcOptions) else { return UIImage(data: data) }
+    let props = CGImageSourceCopyPropertiesAtIndex(source, 0, [kCGImageSourceShouldCache: false] as CFDictionary) as? [CFString: Any]
+    let pixelWidth = (props?[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+    let pixelHeight = (props?[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+    let exifOrientation = (props?[kCGImagePropertyOrientation] as? UInt32) ?? 1
+    let typeId = CGImageSourceGetType(source)
+    let isRaw: Bool = {
+        guard let typeId = typeId else { return false }
+        let uti = typeId as String
+        let rawUTIs: Set<String> = [
+            "public.camera-raw-image",
+            "com.adobe.raw-image",
+            "com.canon.cr2-raw-image", "com.canon.cr3-raw-image",
+            "com.nikon.nrw-raw-image", "com.nikon.nef-raw-image",
+            "com.sony.arw-raw-image", "com.panasonic.rw2-raw-image",
+            "com.apple.raw-image", "com.fuji.raw-image", "com.olympus.orf-raw-image",
+            "com.adobe.dng"
+        ]
+        return rawUTIs.contains(uti)
+    }()
+    let settings = AppSettings.shared
+    let cap = isRaw ? settings.maxRawLongestSide : settings.maxNonRawLongestSide
+    let scale: CGFloat = UIScreen.main.scale
+    let maxSide = max(pixelWidth, pixelHeight)
+    let shouldDownsample: Bool = {
+        switch handling {
+        case .optimized: return maxSide > cap
+        case .original: return false
+        case .ask: return maxSide > cap // fallback seguro
+        }
+    }()
+    if shouldDownsample {
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: cap,
+            kCGImageSourceShouldCacheImmediately: false
+        ]
+        if let cgThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
+            return UIImage(cgImage: cgThumb, scale: scale, orientation: .up)
+        }
+    }
+    let createOpts: [CFString: Any] = [
+        kCGImageSourceShouldAllowFloat: true,
+        kCGImageSourceShouldCacheImmediately: false
+    ]
+    guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, createOpts as CFDictionary) else { return UIImage(data: data) }
+    let image = UIImage(cgImage: cgImage, scale: scale, orientation: UIImage.Orientation(exifOrientation: exifOrientation))
+    return image.fixOrientation()
+}
+
+func encodeUIImageBestEffort(_ image: UIImage) -> (Data, String) {
+    if let heic = exportUIImageAsHEIC(image) { return (heic, "heic") }
+    if let jpg = image.jpegData(compressionQuality: 1.0) { return (jpg, "jpg") }
+    if let png = image.pngData() { return (png, "png") }
+    // Fallback muito raro
+    return (Data(), "img")
 }

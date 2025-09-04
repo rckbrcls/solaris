@@ -86,16 +86,7 @@ struct PhotoEditorView: View {
                     .padding(.bottom, geometry.safeAreaInsets.bottom)
                 }
             }
-            if isSaving {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                ProgressView("Salvando...")
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    .foregroundColor(.white)
-                    .padding(40)
-                    .background(Color.black.opacity(0.7))
-                    .cornerRadius(16)
-            }
+            LoadingOverlay(isVisible: $isSaving, title: "Salvando edição...")
         }
         // Modal de salvar/descartar ao tentar voltar
         .confirmationDialog("Salvar alterações?", isPresented: $showSaveDiscardModal, titleVisibility: .visible) {
