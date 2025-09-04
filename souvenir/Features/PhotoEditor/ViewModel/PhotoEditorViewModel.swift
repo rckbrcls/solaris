@@ -120,7 +120,9 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             sourceUIImage = originalImage
         }
-        guard let base = sourceUIImage?.withAlpha(), let cgImage = base.cgImage, let mtiContext = mtiContext else { return nil }
+        // Corrige orientação antes de gerar pipeline em alta
+        let oriented = sourceUIImage?.fixOrientation()
+        guard let base = oriented?.withAlpha(), let cgImage = base.cgImage, let mtiContext = mtiContext else { return nil }
         let state = editState
         // Repete o pipeline do generatePreview, mas usando a original
         let alphaInfo = cgImage.alphaInfo

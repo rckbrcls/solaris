@@ -128,9 +128,12 @@ struct PhotoEditorView: View {
                     }
                     Spacer()
                     Button(action: {
-                        // Restaura a imagem original e reseta todos os ajustes
+                        // Reverter sempre para o estado "limpo" (sem ajustes)
+                        // e recarregar as bases de preview a partir da original
                         if let _ = viewModel.originalImage {
                             viewModel.resetPreviewBases()
+                            zoomScale = 1.0
+                            lastZoomScale = 1.0
                             viewModel.editState = PhotoEditState()
                         }
                     }) {

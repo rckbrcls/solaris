@@ -154,7 +154,8 @@ struct ContentView: View {
                     let baseURL = rec.editedURL ?? rec.originalURL
                     // Usa a imagem de preview que foi preparada ao tocar
                     let previewImage = selectedPhotoForEditor ?? item.image
-                    PhotoEditorView(photo: previewImage, originalURL: baseURL, namespace: ns, matchedID: "", initialEditState: initialEditState) { finalImage, editState, didSave in
+                    // Para preservar qualidade SEMPRE, o processamento em alta deve usar SEMPRE o original da câmera
+                    PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", initialEditState: initialEditState) { finalImage, editState, didSave in
                         if didSave, let finalImage, let editState {
                             busyTitle = "Salvando edição..."
                             isBusy = true
@@ -287,7 +288,8 @@ struct ContentView: View {
         guard photos.indices.contains(index) else { return }
         selectedPhotoIndex = index
         let rec = photos[index].record
-        let baseURL = rec.editedURL ?? rec.originalURL
+        // Sempre usar o ORIGINAL para montar o preview do editor
+        let baseURL = rec.originalURL
         busyTitle = "Abrindo..."
         isBusy = true
         DispatchQueue.global(qos: .userInitiated).async {
