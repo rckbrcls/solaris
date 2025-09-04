@@ -128,18 +128,28 @@ struct PhotoEditorView: View {
                     }
                     Spacer()
                     Button(action: {
-                        // Reverter sempre para o estado "limpo" (sem ajustes)
-                        // e recarregar as bases de preview a partir da original
-                        if let _ = viewModel.originalImage {
-                            viewModel.resetPreviewBases()
-                            zoomScale = 1.0
-                            lastZoomScale = 1.0
-                            viewModel.editState = PhotoEditState()
-                        }
+                        // Tap: desfaz apenas a última alteração registrada
+                        let gen = UIImpactFeedbackGenerator(style: .light)
+                        gen.impactOccurred()
+                        viewModel.undoLastChange()
                     }) {
                         Image(systemName: "arrow.uturn.backward")
                             .editorIconStyle()
                     }
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5)
+                            .onEnded { _ in
+                                // Long press: desfaz tudo (reset total)
+                                let gen = UIImpactFeedbackGenerator(style: .heavy)
+                                gen.impactOccurred()
+                                if let _ = viewModel.originalImage {
+                                    viewModel.resetPreviewBases()
+                                    zoomScale = 1.0
+                                    lastZoomScale = 1.0
+                                    viewModel.resetAllEditsToClean()
+                                }
+                            }
+                    )
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)

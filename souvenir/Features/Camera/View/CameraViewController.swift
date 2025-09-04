@@ -50,8 +50,11 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         // Setup preview on main thread
         if let cs = captureSession {
             previewLayer = AVCaptureVideoPreviewLayer(session: cs)
-            previewLayer?.videoGravity = .resizeAspect
+            previewLayer?.videoGravity = .resizeAspectFill
             previewLayer?.frame = view.layer.bounds
+            if let connection = previewLayer?.connection, connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
             if let pl = previewLayer {
                 view.layer.addSublayer(pl)
             }
@@ -95,6 +98,9 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         super.viewDidLayoutSubviews()
         if let pl = previewLayer {
             pl.frame = view.bounds
+            if let connection = pl.connection, connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
         }
         flashOverlayView?.frame = view.bounds
     }

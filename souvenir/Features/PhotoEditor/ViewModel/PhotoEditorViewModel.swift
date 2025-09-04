@@ -36,6 +36,9 @@ struct PhotoEditState: Codable, Equatable {
 class PhotoEditorViewModel: ObservableObject {
     @Published var previewImage: UIImage?
     @Published var editState = PhotoEditState()
+    // Simple undo stack of edit states (one per user transaction)
+    private(set) var undoStack: [PhotoEditState] = []
+    private var inChangeTransaction: Bool = false
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
     public var previewBase: UIImage?
@@ -93,11 +96,15 @@ class PhotoEditorViewModel: ObservableObject {
         guard !isInteracting else { return }
         isInteracting = true
         if let low = previewBaseLow { previewBase = low }
+        // register an undo point at the start of a gesture/transaction
+        beginChangeTransaction()
     }
 
     func endInteractiveAdjustments() {
         isInteracting = false
         if let high = previewBaseHigh { previewBase = high }
+        // finish the current transaction
+        endChangeTransaction()
         // Regerar preview final em alta
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -107,6 +114,33 @@ class PhotoEditorViewModel: ObservableObject {
 
     func resetPreviewBases() {
         buildPreviewBases()
+    }
+
+    // MARK: - Undo management
+    func beginChangeTransaction() {
+        if !inChangeTransaction {
+            undoStack.append(editState)
+            inChangeTransaction = true
+        }
+    }
+
+    func endChangeTransaction() {
+        inChangeTransaction = false
+    }
+
+    func registerUndoPoint() {
+        // for discrete changes (button taps)
+        undoStack.append(editState)
+    }
+
+    func undoLastChange() {
+        guard let previous = undoStack.popLast() else { return }
+        editState = previous
+    }
+
+    func resetAllEditsToClean() {
+        undoStack.removeAll()
+        editState = PhotoEditState()
     }
 
     /// Gera a imagem final em alta qualidade com todos os ajustes aplicados

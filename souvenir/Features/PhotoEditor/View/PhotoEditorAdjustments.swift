@@ -289,7 +289,7 @@ struct PhotoEditorAdjustments: View {
                     VibranceSlider(value: $vibrance, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorInvert" {
-                    InvertToggle(colorInvert: $colorInvert)
+                    InvertToggle(colorInvert: $colorInvert, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "pixelateAmount" {
                     PixelateSlider(value: $pixelateAmount, onBegin: onBeginAdjust, onEnd: onEndAdjust)
@@ -315,14 +315,18 @@ struct PhotoEditorAdjustments: View {
 private struct InvertToggle: View {
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     @Binding var colorInvert: Float
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             Button(action: {
                 if colorInvert != 0.0 {
+                    onBegin?()
                     colorInvert = 0.0
                     let gen = UIImpactFeedbackGenerator(style: .medium)
                     gen.impactOccurred()
+                    onEnd?()
                 }
             }) {
                 Text("Off")
@@ -335,9 +339,11 @@ private struct InvertToggle: View {
             }
             Button(action: {
                 if colorInvert != 1.0 {
+                    onBegin?()
                     colorInvert = 1.0
                     let gen = UIImpactFeedbackGenerator(style: .medium)
                     gen.impactOccurred()
+                    onEnd?()
                 }
             }) {
                 Text("On")
@@ -374,6 +380,13 @@ private struct ColorTintControls: View {
         let pct = min(max(value, 0.0), 100.0) / 100.0
         return min(max(pct * 1.0, 0.0), 1.0)
     }
+    private func colorsAreVerySimilar(_ a: SIMD4<Float>, _ b: SIMD4<Float>, threshold: Float = 0.06) -> Bool {
+        let dx = a.x - b.x
+        let dy = a.y - b.y
+        let dz = a.z - b.z
+        let dist = sqrt(dx*dx + dy*dy + dz*dz)
+        return dist < threshold
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -396,10 +409,12 @@ private struct ColorTintControls: View {
                     Spacer()
                     
                     Button("Limpar") {
+                        onBeginAdjust?()
                         isDualToneActive = false
                         colorTintSecondary = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
                         let gen = UIImpactFeedbackGenerator(style: .medium)
                         gen.impactOccurred()
+                        onEndAdjust?()
                     }
                     .font(.caption)
                     .foregroundColor(.red)
@@ -418,55 +433,73 @@ private struct ColorTintControls: View {
                             let isSelectedPreset = colorEquals(colorTint, preset)
                             let isSelectedSecondary = isDualToneActive && colorEquals(colorTintSecondary, preset)
                             
-                            Button(action: {
-                                // Tap normal - seleciona cor primária
-                                colorTint = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
-                                colorTintIntensity = 0.9
-                                let gen = UIImpactFeedbackGenerator(style: .light)
-                                gen.impactOccurred()
-                            }) {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(presetColor)
-                                    .frame(width: 44, height: 44)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(
-                                                isSelectedPreset ? Color.accentColor : 
-                                                isSelectedSecondary ? Color.orange : Color.clear, 
-                                                lineWidth: 3
-                                            )
-                                            .padding(0.5)
-                                            .allowsHitTesting(false)
-                                    )
-                                    .overlay(
-                                        // Indicador visual para dual tone
-                                        Group {
-                                            if isSelectedSecondary {
-                                                Image(systemName: "2.circle.fill")
-                                                    .foregroundColor(.white)
-                                                    .background(Circle().fill(Color.orange))
-                                                    .font(.caption2)
-                                                    .offset(x: 12, y: -12)
-                                            }
-                                        }
-                                    )
-                                    .contentShape(RoundedRectangle(cornerRadius: 10))
-                                    .padding(2)
-                            }
-                            .buttonStyle(.plain)
-                            .simultaneousGesture(
-                                LongPressGesture(minimumDuration: 0.5)
-                                    .onEnded { _ in
-                                        // Long press - seleciona cor secundária para dual tone
-                                        if colorTint.w > 0 { // só permite se já tiver uma cor primária
-                                            colorTintSecondary = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
-                                            isDualToneActive = true
-                                            let gen = UIImpactFeedbackGenerator(style: .heavy)
-                                            gen.impactOccurred()
+                            // Gestos exclusivos: LongPress (dual tone) OU Tap (primária), nunca ambos
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(presetColor)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(
+                                            isSelectedPreset ? Color.accentColor :
+                                            isSelectedSecondary ? Color.orange : Color.clear,
+                                            lineWidth: 3
+                                        )
+                                        .padding(0.5)
+                                        .allowsHitTesting(false)
+                                )
+                                .overlay(
+                                    // Indicador visual para dual tone
+                                    Group {
+                                        if isSelectedSecondary {
+                                            Image(systemName: "2.circle.fill")
+                                                .foregroundColor(.white)
+                                                .background(Circle().fill(Color.orange))
+                                                .font(.caption2)
+                                                .offset(x: 12, y: -12)
                                         }
                                     }
-                            )
-                            .zIndex(2)
+                                )
+                                .contentShape(RoundedRectangle(cornerRadius: 10))
+                                .padding(2)
+                                .gesture(
+                                    LongPressGesture(minimumDuration: 0.5)
+                                        .exclusively(before: TapGesture())
+                                        .onEnded { outcome in
+                                            switch outcome {
+                                            case .first:
+                                                // Long press: set secondary for dual tone (only if distinct)
+                                                if colorTint.w > 0 {
+                                                    let candidate = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
+                                                    if !(colorEquals(colorTint, candidate) || colorsAreVerySimilar(colorTint, candidate)) {
+                                                        onBeginAdjust?()
+                                                        colorTintSecondary = candidate
+                                                        isDualToneActive = true
+                                                        let gen = UIImpactFeedbackGenerator(style: .heavy)
+                                                        gen.impactOccurred()
+                                                        onEndAdjust?()
+                                                    } else {
+                                                        let gen = UIImpactFeedbackGenerator(style: .rigid)
+                                                        gen.impactOccurred(intensity: 0.5)
+                                                    }
+                                                }
+                                            case .second:
+                                                // Tap: select primary
+                                                onBeginAdjust?()
+                                                let hadColor = (colorTint.w > 0)
+                                                colorTint = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
+                                                colorTintIntensity = 0.9
+                                                if !hadColor { colorTintFactor = 0.30 }
+                                                if isDualToneActive && colorsAreVerySimilar(colorTint, colorTintSecondary) {
+                                                    isDualToneActive = false
+                                                    colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
+                                                }
+                                                let gen = UIImpactFeedbackGenerator(style: .light)
+                                                gen.impactOccurred()
+                                                onEndAdjust?()
+                                            }
+                                        }
+                                )
+                                .zIndex(2)
                         }
                         ZStack {
                             ColorPicker("", selection: Binding(
@@ -481,15 +514,31 @@ private struct ColorTintControls: View {
                                     let ui = UIColor(cgColor: newColor.cgColor ?? UIColor.white.cgColor)
                                     var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
                                     if ui.getRed(&r, green: &g, blue: &b, alpha: &a) {
+                                        onBeginAdjust?()
+                                        let hadColor = (colorTint.w > 0)
                                         colorTint = SIMD4<Float>(x: Float(r), y: Float(g), z: Float(b), w: 1.0)
                                         colorTintIntensity = 0.9
+                                        if !hadColor { colorTintFactor = 0.30 }
+                                        if isDualToneActive && colorsAreVerySimilar(colorTint, colorTintSecondary) {
+                                            isDualToneActive = false
+                                            colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
+                                        }
                                         let gen = UIImpactFeedbackGenerator(style: .light)
                                         gen.impactOccurred()
+                                        onEndAdjust?()
                                     }
                                     #else
                                     if let components = newColor.cgColor?.components, components.count >= 3 {
+                                        onBeginAdjust?()
+                                        let hadColor = (colorTint.w > 0)
                                         colorTint = SIMD4<Float>(x: Float(components[0]), y: Float(components[1]), z: Float(components[2]), w: 1.0)
                                         colorTintIntensity = 0.9
+                                        if !hadColor { colorTintFactor = 0.30 }
+                                        if isDualToneActive && colorsAreVerySimilar(colorTint, colorTintSecondary) {
+                                            isDualToneActive = false
+                                            colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
+                                        }
+                                        onEndAdjust?()
                                     }
                                     #endif
                                 }
@@ -533,12 +582,14 @@ private struct ColorTintControls: View {
                 .zIndex(1)
                 Button(action: {
                     if colorTint.w != 0.0 || isDualToneActive {
+                        onBeginAdjust?()
                         colorTint = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
                         colorTintSecondary = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
                         isDualToneActive = false
                         colorTintIntensity = 0.9
                         let gen = UIImpactFeedbackGenerator(style: .medium)
                         gen.impactOccurred()
+                        onEndAdjust?()
                     }
                 }) {
                     Image(systemName: "xmark.circle.fill")
