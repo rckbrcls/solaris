@@ -61,6 +61,7 @@ struct PhotoEditorView: View {
     @State private var showUndoToast = false
     @State private var adjustmentsHeight: CGFloat = 0
     @State private var imageHeight: CGFloat = 0
+    @State private var undoToastWorkItem: DispatchWorkItem? = nil
 
     private var initialEditState: PhotoEditState
 
@@ -253,13 +254,21 @@ struct PhotoEditorView: View {
         }
         .onChange(of: viewModel.lastUndoMessage) { msg in
             guard msg != nil else { return }
+            // Cancel any previous scheduled hide to avoid early dismissal
+            undoToastWorkItem?.cancel()
             withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { showUndoToast = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            let work = DispatchWorkItem { [weak viewModel] in
                 withAnimation(.easeOut(duration: 0.4)) { showUndoToast = false }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    viewModel.clearLastUndoMessage()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    viewModel?.clearLastUndoMessage()
                 }
             }
+            undoToastWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: work)
+        }
+        .onDisappear {
+            undoToastWorkItem?.cancel()
+            undoToastWorkItem = nil
         }
         .toolbar { } // remove default toolbar items
     }
