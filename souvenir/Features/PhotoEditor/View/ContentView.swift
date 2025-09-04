@@ -24,52 +24,20 @@ struct ContentView: View {
     @State private var isBusy: Bool = false
     @State private var busyTitle: String = ""
     @State private var showSettings: Bool = false
-    @State private var showRawChoiceDialog: Bool = false
-    @State private var batchRawHandling: RawHandlingChoice? = nil
-    @State private var pendingImportItems: [PhotosPickerItem] = []
-    struct StoredPhoto: Codable {
-        let url: URL
-        let data: Data
-        let image: UIImage
-        let originalData: Data
-        var editState: PhotoEditState? = nil
-
-        enum CodingKeys: String, CodingKey {
-            case url, data, editState, originalData
-        }
-
-        // UIImage não é Codable, então customizamos
-        init(url: URL, data: Data, image: UIImage, originalData: Data, editState: PhotoEditState? = nil) {
-            self.url = url
-            self.data = data
-            self.image = image
-            self.originalData = originalData
-            self.editState = editState
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            url = try container.decode(URL.self, forKey: .url)
-            data = try container.decode(Data.self, forKey: .data)
-            originalData = (try? container.decode(Data.self, forKey: .originalData)) ?? data
-            editState = try container.decodeIfPresent(PhotoEditState.self, forKey: .editState)
-            image = loadUIImageThumbnail(from: data, maxPixel: 512) ?? UIImage()
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(url, forKey: .url)
-            try container.encode(data, forKey: .data)
-            try container.encodeIfPresent(editState, forKey: .editState)
-            try container.encode(originalData, forKey: .originalData)
-        }
+    @State private var isImportFlowActive: Bool = false
+    struct PhotoItem: Identifiable {
+        let id: String
+        var record: PhotoRecord
+        var image: UIImage // thumbnail
     }
-    @State private var photos: [StoredPhoto] = []
+    @State private var records: [PhotoRecord] = []
+    @State private var photos: [PhotoItem] = []
     @State private var showCamera = false
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var selectedPhotoForEditor: UIImage? = nil
     @State private var selectedPhotoIndex: Int? = nil
     @State private var isSelectionActive: Bool = false
+    @State private var didInitialLoad: Bool = false
 
     @Namespace private var ns
 
@@ -89,11 +57,13 @@ struct ContentView: View {
                         selectedItems: $selectedItems,
                         ns: ns,
                         onPhotoSelected: { index in
-                            selectedPhotoIndex = index
-                            navigateToPhotoEditor(photo: photos[index].image)
+                            openEditor(for: index)
                         },
                         onPhotosChanged: {
-                            savePhotos()
+                            // Manifest salvo pelo serviço após operações
+                        },
+                        onDelete: { indices in
+                            deletePhotos(at: indices)
                         },
                         onSelectionChanged: { active in
                             isSelectionActive = active
@@ -111,20 +81,20 @@ struct ContentView: View {
                 LoadingOverlay(isVisible: $isBusy, title: busyTitle)
             }
             .onChange(of: selectedItems) { _, newItems in
-                pendingImportItems = newItems
-                if AppSettings.shared.rawHandlingDefault == .ask {
-                    showRawChoiceDialog = true
-                } else {
-                    batchRawHandling = AppSettings.shared.rawHandlingDefault
-                    processImport(items: newItems, rawHandling: batchRawHandling!)
-                }
+                guard !newItems.isEmpty, !isImportFlowActive else { return }
+                isImportFlowActive = true
+                processImport(items: newItems, rawHandling: .original)
             }
             .onAppear {
+                guard !didInitialLoad else { return }
                 busyTitle = "Carregando fotos..."
                 isBusy = true
                 DispatchQueue.global(qos: .userInitiated).async {
                     loadPhotos()
-                    DispatchQueue.main.async { isBusy = false }
+                    DispatchQueue.main.async {
+                        isBusy = false
+                        didInitialLoad = true
+                    }
                 }
             }
             .navigationDestination(isPresented: $showCamera) {
@@ -132,33 +102,34 @@ struct ContentView: View {
                     busyTitle = "Salvando foto..."
                     isBusy = true
                     DispatchQueue.global(qos: .userInitiated).async {
-                        let orientationFixedPhoto = photo.fixOrientation()
-                        // Tenta salvar como HEIC, depois JPG, depois PNG
+                        let lib = PhotoLibrary.shared
+                        lib.ensureDirs()
+                        let fixed = photo.fixOrientation()
+                        // Copia original da câmera (preferir HEIC): gera dados e salva como original
                         var data: Data? = nil
-                        var ext: String = "heic"
-                        if let heicData = exportUIImageAsHEIC(orientationFixedPhoto) {
-                            data = heicData
-                            ext = "heic"
-                        } else if let jpgData = orientationFixedPhoto.jpegData(compressionQuality: 1.0) {
-                            data = jpgData
-                            ext = "jpg"
-                        } else if let pngData = orientationFixedPhoto.pngData() {
-                            data = pngData
-                            ext = "png"
+                        var ext = "heic"
+                        if let heic = exportUIImageAsHEIC(fixed) { data = heic; ext = "heic" }
+                        else if let jpg = fixed.jpegData(compressionQuality: 1.0) { data = jpg; ext = "jpg" }
+                        else if let png = fixed.pngData() { data = png; ext = "png" }
+                        guard let data else { DispatchQueue.main.async { isBusy = false }; return }
+                        let id = UUID().uuidString
+                        let origURL = lib.originalsDir().appendingPathComponent("\(id).\(ext)")
+                        try? data.write(to: origURL)
+                        // Thumb
+                        var thumbURL = lib.thumbsDir().appendingPathComponent("\(id).jpg")
+                        if let thumbImg = fixed.resizeToFit(maxSize: 512), let (tdata, text) = encodeThumbnailImage(thumbImg) {
+                            thumbURL = lib.thumbsDir().appendingPathComponent("\(id).\(text)")
+                            try? tdata.write(to: thumbURL)
                         }
-                        if let data {
-                            let filename = "photo_\(UUID().uuidString).\(ext)"
-                            let url = getPhotoStorageDir().appendingPathComponent(filename)
-                            try? FileManager.default.createDirectory(at: getPhotoStorageDir(), withIntermediateDirectories: true)
-                            try? data.write(to: url)
-                            DispatchQueue.main.async {
-                                let thumb = loadUIImageThumbnail(from: data, maxPixel: 512) ?? orientationFixedPhoto
-                                photos.append(StoredPhoto(url: url, data: data, image: thumb, originalData: data))
-                                savePhotos()
-                                isBusy = false
-                            }
-                        } else {
-                            DispatchQueue.main.async { isBusy = false }
+                        // Atualiza manifest e UI
+                        let rec = PhotoRecord(id: id, originalURL: origURL, thumbURL: thumbURL, editedURL: nil, editState: nil, createdAt: Date())
+                        records.append(rec)
+                        try? lib.saveManifest(PhotoManifest(items: records))
+                        let uiThumb = UIImage(contentsOfFile: thumbURL.path) ?? fixed
+                        ImageCache.shared.set(uiThumb, forKey: "thumb_\(id)")
+                        DispatchQueue.main.async {
+                            photos.append(PhotoItem(id: id, record: rec, image: uiThumb))
+                            isBusy = false
                         }
                     }
                 })
@@ -174,39 +145,48 @@ struct ContentView: View {
                 set: { if !$0 { selectedPhotoForEditor = nil; selectedPhotoIndex = nil } }
             )) {
                 if let idx = selectedPhotoIndex, photos.indices.contains(idx) {
-                    let stored = photos[idx]
-                    let initialEditState = stored.editState
-                    let originalImage = loadUIImageFullQuality(from: stored.originalData) ?? stored.image
-                    PhotoEditorView(photo: originalImage, namespace: ns, matchedID: "", initialEditState: initialEditState) { finalImage, editState, didSave in
+                    let item = photos[idx]
+                    let rec = item.record
+                    let initialEditState = rec.editState
+                    let baseURL = rec.editedURL ?? rec.originalURL
+                    // Usa a imagem de preview que foi preparada ao tocar
+                    let previewImage = selectedPhotoForEditor ?? item.image
+                    PhotoEditorView(photo: previewImage, originalURL: baseURL, namespace: ns, matchedID: "", initialEditState: initialEditState) { finalImage, editState, didSave in
                         if didSave, let finalImage, let editState {
                             busyTitle = "Salvando edição..."
                             isBusy = true
                             DispatchQueue.global(qos: .userInitiated).async {
-                                var data: Data? = nil
+                                let lib = PhotoLibrary.shared
+                                lib.ensureDirs()
+                                // Encode edição
+                                var dataOut: Data? = nil
                                 var ext = "heic"
-                                if let heicData = exportUIImageAsHEIC(finalImage) {
-                                    data = heicData
-                                    ext = "heic"
-                                } else if let jpgData = finalImage.jpegData(compressionQuality: 1.0) {
-                                    data = jpgData
-                                    ext = "jpg"
-                                } else if let pngData = finalImage.pngData() {
-                                    data = pngData
-                                    ext = "png"
+                                if let heic = exportUIImageAsHEIC(finalImage) { dataOut = heic; ext = "heic" }
+                                else if let jpg = finalImage.jpegData(compressionQuality: 1.0) { dataOut = jpg; ext = "jpg" }
+                                else if let png = finalImage.pngData() { dataOut = png; ext = "png" }
+                                guard let dataOut else { DispatchQueue.main.async { isBusy = false }; return }
+                                let editURL = lib.editsDir().appendingPathComponent("\(rec.id).\(ext)")
+                                try? dataOut.write(to: editURL)
+                                // Atualiza thumb
+                                var thumbURL = lib.thumbsDir().appendingPathComponent("\(rec.id).jpg")
+                                if let thumbImg = finalImage.resizeToFit(maxSize: 512), let (tdata, text) = encodeThumbnailImage(thumbImg) {
+                                    thumbURL = lib.thumbsDir().appendingPathComponent("\(rec.id).\(text)")
+                                    try? tdata.write(to: thumbURL)
                                 }
-                                if let data {
-                                    let filename = "photo_\(UUID().uuidString).\(ext)"
-                                    let url = getPhotoStorageDir().appendingPathComponent(filename)
-                                    try? FileManager.default.createDirectory(at: getPhotoStorageDir(), withIntermediateDirectories: true)
-                                    try? data.write(to: url)
-                                    DispatchQueue.main.async {
-                                        let thumb = loadUIImageThumbnail(from: data, maxPixel: 512) ?? finalImage
-                                        photos[idx] = StoredPhoto(url: url, data: data, image: thumb, originalData: stored.originalData, editState: editState)
-                                        savePhotos()
-                                        isBusy = false
-                                    }
-                                } else {
-                                    DispatchQueue.main.async { isBusy = false }
+                                // Atualiza manifest em memória e disco
+                                var updated = rec
+                                updated.editedURL = editURL
+                                updated.thumbURL = thumbURL
+                                updated.editState = editState
+                                if let pos = records.firstIndex(where: { $0.id == updated.id }) {
+                                    records[pos] = updated
+                                }
+                                try? lib.saveManifest(PhotoManifest(items: records))
+                                DispatchQueue.main.async {
+                                    let newThumb = UIImage(contentsOfFile: thumbURL.path) ?? finalImage
+                                    ImageCache.shared.set(newThumb, forKey: "thumb_\(updated.id)")
+                                    photos[idx] = PhotoItem(id: updated.id, record: updated, image: newThumb)
+                                    isBusy = false
                                 }
                             }
                         }
@@ -228,22 +208,6 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(AppSettings.shared)
-        }
-        .confirmationDialog("Importar RAW como?", isPresented: $showRawChoiceDialog, titleVisibility: .visible) {
-            Button("Otimizado", role: .none) {
-                batchRawHandling = .optimized
-                processImport(items: pendingImportItems, rawHandling: .optimized)
-            }
-            Button("Original (pode usar muita memória)", role: .destructive) {
-                batchRawHandling = .original
-                processImport(items: pendingImportItems, rawHandling: .original)
-            }
-            Button("Cancelar", role: .cancel) {
-                selectedItems.removeAll()
-                pendingImportItems.removeAll()
-            }
-        } message: {
-            Text("Para este lote de fotos RAW")
         }
     }
 
@@ -271,32 +235,65 @@ struct ContentView: View {
     }
 
     func savePhotos() {
-        // Snapshot no main e salva em background para não travar a UI
-        let snapshot = self.photos
+        // Salva manifest (registros) em background
+        let snapshot = self.records
         DispatchQueue.global(qos: .utility).async {
-            do {
-                let data = try JSONEncoder().encode(snapshot)
-                UserDefaults.standard.set(data, forKey: "savedPhotos")
-            } catch {
-                print("[savePhotos] Falha ao salvar fotos: \(error)")
-            }
+            try? PhotoLibrary.shared.saveManifest(PhotoManifest(items: snapshot))
         }
     }
 
     func loadPhotos() {
-        if let data = UserDefaults.standard.data(forKey: "savedPhotos") {
-            do {
-                let loaded = try JSONDecoder().decode([StoredPhoto].self, from: data)
-                // Constrói thumbs leves para a grade
-                photos = loaded.map { stored in
-                    var s = stored
-                    if let thumb = loadUIImageThumbnail(from: s.data, maxPixel: 512) {
-                        s = StoredPhoto(url: s.url, data: s.data, image: thumb, originalData: s.originalData, editState: s.editState)
-                    }
-                    return s
-                }
-            } catch {
-                print("[loadPhotos] Falha ao carregar fotos: \(error)")
+        let lib = PhotoLibrary.shared
+        let manifest = lib.loadManifest()
+        records = manifest.items
+        photos = manifest.items.map { rec in
+            if let cached = ImageCache.shared.image(forKey: "thumb_\(rec.id)") {
+                return PhotoItem(id: rec.id, record: rec, image: cached)
+            }
+            let img: UIImage
+            if let ui = UIImage(contentsOfFile: rec.thumbURL.path) {
+                img = ui
+            } else if let data = try? Data(contentsOf: rec.thumbURL), let ui = UIImage(data: data) {
+                img = ui
+            } else {
+                img = UIImage()
+            }
+            ImageCache.shared.set(img, forKey: "thumb_\(rec.id)")
+            return PhotoItem(id: rec.id, record: rec, image: img)
+        }
+    }
+
+    func deletePhotos(at indices: [Int]) {
+        let lib = PhotoLibrary.shared
+        let sorted = indices.sorted(by: >)
+        var idsToDelete: [String] = []
+        for i in sorted {
+            guard photos.indices.contains(i) else { continue }
+            let rec = photos[i].record
+            PhotoLibrary.shared.deleteFiles(for: rec)
+            idsToDelete.append(rec.id)
+            photos.remove(at: i)
+            ImageCache.shared.remove("thumb_\(rec.id)")
+        }
+        records.removeAll { idsToDelete.contains($0.id) }
+        try? lib.saveManifest(PhotoManifest(items: records))
+    }
+
+    // MARK: - Editor navigation helpers
+    func openEditor(for index: Int) {
+        guard photos.indices.contains(index) else { return }
+        selectedPhotoIndex = index
+        let rec = photos[index].record
+        let baseURL = rec.editedURL ?? rec.originalURL
+        busyTitle = "Abrindo..."
+        isBusy = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let data = (try? Data(contentsOf: baseURL)) ?? Data()
+            let maxPixel = Int(PhotoEditorHelper.suggestedPreviewMaxPoints(doubleTapZoomScale: 3.0) * UIScreen.main.scale)
+            let image = loadUIImageThumbnail(from: data, maxPixel: maxPixel) ?? photos[index].image
+            DispatchQueue.main.async {
+                self.navigateToPhotoEditor(photo: image)
+                self.isBusy = false
             }
         }
     }
@@ -306,60 +303,60 @@ struct ContentView: View {
         busyTitle = "Importando fotos..."
         isBusy = true
         DispatchQueue.global(qos: .userInitiated).async {
-            var importedPhotos: [StoredPhoto] = []
-            let storageDir = getPhotoStorageDir()
-            try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
+            let lib = PhotoLibrary.shared
+            lib.ensureDirs()
             let group = DispatchGroup()
+            let semaphore = DispatchSemaphore(value: 3)
             for item in items {
                 group.enter()
                 Task {
+                    semaphore.wait()
                     if let data = try? await item.loadTransferable(type: Data.self) {
                         autoreleasepool {
                             let (isRaw, uti) = detectImageRawInfo(data: data)
-                            let gridThumb = loadUIImageThumbnail(from: data, maxPixel: 512) ?? UIImage()
-                            var storedURL: URL? = nil
-                            var storedData: Data? = nil
+                            let id = UUID().uuidString
                             if isRaw && rawHandling == .original {
                                 let ext = rawFileExtension(from: uti) ?? "raw"
-                                let filename = "photo_\(UUID().uuidString).\(ext)"
-                                let url = storageDir.appendingPathComponent(filename)
-                                do {
-                                    try data.write(to: url)
-                                    storedURL = url
-                                    storedData = data
-                                } catch {
-                                    print("[Import] Falha ao salvar RAW em: \(url.path)")
+                                let origURL = lib.originalsDir().appendingPathComponent("\(id).\(ext)")
+                                try? data.write(to: origURL)
+                                var thumbURL = lib.thumbsDir().appendingPathComponent("\(id).jpg")
+                                if let timg = loadUIImageThumbnail(from: data, maxPixel: 512), let (tdata, text) = encodeThumbnailImage(timg) {
+                                    thumbURL = lib.thumbsDir().appendingPathComponent("\(id).\(text)")
+                                    try? tdata.write(to: thumbURL)
                                 }
+                                let rec = PhotoRecord(id: id, originalURL: origURL, thumbURL: thumbURL, editedURL: nil, editState: nil, createdAt: Date())
+                                records.append(rec)
+                                let uiThumb = UIImage(contentsOfFile: thumbURL.path) ?? UIImage()
+                                ImageCache.shared.set(uiThumb, forKey: "thumb_\(id)")
+                                DispatchQueue.main.async { photos.append(PhotoItem(id: id, record: rec, image: uiThumb)) }
                             } else {
-                                if let img = loadUIImageWithHandling(from: data, handling: isRaw ? rawHandling : .optimized) {
-                                    let (encoded, ext) = encodeUIImageBestEffort(img)
-                                    let filename = "photo_\(UUID().uuidString).\(ext)"
-                                    let url = storageDir.appendingPathComponent(filename)
-                                    do {
-                                        try encoded.write(to: url)
-                                        storedURL = url
-                                        storedData = encoded
-                                    } catch {
-                                        print("[Import] Falha ao salvar imagem em: \(url.path)")
-                                    }
+                                // Não-RAW: manter qualidade original, copiar dados e gerar thumb
+                                let ext = detectImageExtension(data: data)
+                                let origURL = lib.originalsDir().appendingPathComponent("\(id).\(ext)")
+                                try? data.write(to: origURL)
+                                var thumbURL = lib.thumbsDir().appendingPathComponent("\(id).jpg")
+                                if let timg = loadUIImageThumbnail(from: data, maxPixel: 512), let (tdata, text) = encodeThumbnailImage(timg) {
+                                    thumbURL = lib.thumbsDir().appendingPathComponent("\(id).\(text)")
+                                    try? tdata.write(to: thumbURL)
                                 }
-                            }
-                            if let url = storedURL, let sdata = storedData {
-                                importedPhotos.append(StoredPhoto(url: url, data: sdata, image: gridThumb, originalData: sdata))
+                                let rec = PhotoRecord(id: id, originalURL: origURL, thumbURL: thumbURL, editedURL: nil, editState: nil, createdAt: Date())
+                                records.append(rec)
+                                let uiThumb = UIImage(contentsOfFile: thumbURL.path) ?? UIImage()
+                                ImageCache.shared.set(uiThumb, forKey: "thumb_\(id)")
+                                DispatchQueue.main.async { photos.append(PhotoItem(id: id, record: rec, image: uiThumb)) }
                             }
                         }
                     }
+                    semaphore.signal()
                     group.leave()
                 }
             }
             group.notify(queue: .main) {
-                if !importedPhotos.isEmpty {
-                    photos.append(contentsOf: importedPhotos)
-                    savePhotos()
-                }
+                try? lib.saveManifest(PhotoManifest(items: records))
                 selectedItems.removeAll()
-                pendingImportItems.removeAll()
+                // fluxo de importação finalizado
                 isBusy = false
+                isImportFlowActive = false
             }
         }
     }
@@ -403,10 +400,8 @@ func loadUIImageFullQuality(from data: Data) -> UIImage? {
     let defaultHandling = settings.rawHandlingDefault
     let cap = isProbablyRAW ? settings.maxRawLongestSide : settings.maxNonRawLongestSide
     let effectiveHandling: RawHandlingChoice = (defaultHandling == .ask) ? .optimized : defaultHandling
-    let shouldDownsample: Bool = {
-        if effectiveHandling == .original { return false }
-        return maxSide > cap
-    }()
+    // Manter qualidade SEMPRE: não fazer downsample aqui
+    let shouldDownsample: Bool = false
 
     let scale: CGFloat = UIScreen.main.scale
     if shouldDownsample {
@@ -461,9 +456,7 @@ func detectImageExtension(data: Data) -> String {
     return "img"
 }
 
-func getPhotoStorageDir() -> URL {
-    FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoStorage")
-}
+func getPhotoStorageDir() -> URL { PhotoLibrary.shared.storageRoot() }
 
 #Preview {
     ContentView()
@@ -577,4 +570,35 @@ func encodeUIImageBestEffort(_ image: UIImage) -> (Data, String) {
     if let png = image.pngData() { return (png, "png") }
     // Fallback muito raro
     return (Data(), "img")
+}
+
+// MARK: - Thumbnail encode helper
+func encodeThumbnailImage(_ image: UIImage) -> (Data, String)? {
+    if let heic = exportUIImageAsHEIC(image) { return (heic, "heic") }
+    if let jpg = image.jpegData(compressionQuality: 0.9) { return (jpg, "jpg") }
+    return nil
+}
+
+// MARK: - Image metadata helper
+func imageDimensions(at url: URL) -> (Int, Int, Bool) {
+    guard let src = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return (0, 0, false) }
+    let props = CGImageSourceCopyPropertiesAtIndex(src, 0, [kCGImageSourceShouldCache: false] as CFDictionary) as? [CFString: Any]
+    let w = (props?[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+    let h = (props?[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+    let typeId = CGImageSourceGetType(src)
+    let isRaw: Bool = {
+        guard let typeId = typeId else { return false }
+        let uti = typeId as String
+        let rawUTIs: Set<String> = [
+            "public.camera-raw-image",
+            "com.adobe.raw-image",
+            "com.canon.cr2-raw-image", "com.canon.cr3-raw-image",
+            "com.nikon.nrw-raw-image", "com.nikon.nef-raw-image",
+            "com.sony.arw-raw-image", "com.panasonic.rw2-raw-image",
+            "com.apple.raw-image", "com.fuji.raw-image", "com.olympus.orf-raw-image",
+            "com.adobe.dng"
+        ]
+        return rawUTIs.contains(uti)
+    }()
+    return (w, h, isRaw)
 }

@@ -11,6 +11,8 @@ struct PhotosScrollView<PhotoType>: View {
     var ns: Namespace.ID
     var onPhotoSelected: (Int) -> Void
     var onPhotosChanged: () -> Void
+    // Novo: delega a exclusão para o chamador para poder remover arquivos
+    var onDelete: ([Int]) -> Void = { _ in }
     var onSelectionChanged: (Bool) -> Void
     var getImage: (PhotoType) -> UIImage
 
@@ -84,12 +86,7 @@ struct PhotosScrollView<PhotoType>: View {
                     }
                     Button(action: {
                         let indicesToRemove = selectedPhotoIndices.sorted(by: >)
-                        print("Removendo índices: \(indicesToRemove)")
-                        for index in indicesToRemove {
-                            if index < photos.count {
-                                photos.remove(at: index)
-                            }
-                        }
+                        onDelete(indicesToRemove)
                         selectedPhotoIndices.removeAll()
                         onPhotosChanged()
                     }) {

@@ -20,8 +20,8 @@ struct PhotoEditorView: View {
 
     private var initialEditState: PhotoEditState
 
-    init(photo: UIImage, namespace: Namespace.ID, matchedID: String, initialEditState: PhotoEditState? = nil, onFinishEditing: ((UIImage?, PhotoEditState?, Bool) -> Void)? = nil) {
-        _viewModel = StateObject(wrappedValue: PhotoEditorViewModel(image: photo))
+    init(photo: UIImage, originalURL: URL, namespace: Namespace.ID, matchedID: String, initialEditState: PhotoEditState? = nil, onFinishEditing: ((UIImage?, PhotoEditState?, Bool) -> Void)? = nil) {
+        _viewModel = StateObject(wrappedValue: PhotoEditorViewModel(image: photo, originalImageURL: originalURL))
         self.namespace = namespace
         self.matchedID = matchedID
         self.onFinishEditing = onFinishEditing

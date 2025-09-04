@@ -45,9 +45,13 @@ class PhotoEditorViewModel: ObservableObject {
 
     // Adiciona referência à imagem original em alta qualidade
     public var originalImage: UIImage?
+    private var originalImageURL: URL?
+    private var originalImageData: Data?
 
-    init(image: UIImage?) {
-        self.originalImage = image // Mantém a original para exportação final
+    init(image: UIImage?, originalImageURL: URL? = nil, originalImageData: Data? = nil) {
+        self.originalImage = image // Em memória: preview base
+        self.originalImageURL = originalImageURL
+        self.originalImageData = originalImageData
         buildPreviewBases()
         if let base = self.previewBase {
             print("[PhotoEditorViewModel] previewBase size: \(base.size), scale: \(base.scale)")
@@ -107,7 +111,16 @@ class PhotoEditorViewModel: ObservableObject {
 
     /// Gera a imagem final em alta qualidade com todos os ajustes aplicados
     func generateFinalImage() -> UIImage? {
-        guard let base = originalImage?.withAlpha(), let cgImage = base.cgImage, let mtiContext = mtiContext else { return nil }
+        // Carrega em alta do URL/dados no momento do export, evitando manter gigante em memória durante edição
+        var sourceUIImage: UIImage?
+        if let url = originalImageURL, let data = try? Data(contentsOf: url) {
+            sourceUIImage = UIImage(data: data)
+        } else if let data = originalImageData {
+            sourceUIImage = UIImage(data: data)
+        } else {
+            sourceUIImage = originalImage
+        }
+        guard let base = sourceUIImage?.withAlpha(), let cgImage = base.cgImage, let mtiContext = mtiContext else { return nil }
         let state = editState
         // Repete o pipeline do generatePreview, mas usando a original
         let alphaInfo = cgImage.alphaInfo
