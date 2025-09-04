@@ -155,7 +155,7 @@ struct ContentView: View {
                     // Usa a imagem de preview que foi preparada ao tocar
                     let previewImage = selectedPhotoForEditor ?? item.image
                     // Para preservar qualidade SEMPRE, o processamento em alta deve usar SEMPRE o original da câmera
-                    PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", initialEditState: initialEditState) { finalImage, editState, didSave in
+                    PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", initialEditState: initialEditState, initialHistory: rec.editHistory ?? []) { finalImage, editState, history, didSave in
                         if didSave, let finalImage, let editState {
                             busyTitle = "Salvando edição..."
                             isBusy = true
@@ -182,6 +182,7 @@ struct ContentView: View {
                                 updated.editedURL = editURL
                                 updated.thumbURL = thumbURL
                                 updated.editState = editState
+                                updated.editHistory = history
                                 if let pos = records.firstIndex(where: { $0.id == updated.id }) {
                                     records[pos] = updated
                                 }

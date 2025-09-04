@@ -7,6 +7,7 @@ struct PhotoRecord: Codable, Identifiable, Equatable {
     var thumbURL: URL
     var editedURL: URL?
     var editState: PhotoEditState?
+    var editHistory: [PhotoEditState]? = nil // histórico persistente de estados anteriores
     let createdAt: Date
 }
 

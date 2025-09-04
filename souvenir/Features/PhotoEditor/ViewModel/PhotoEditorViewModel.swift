@@ -121,6 +121,14 @@ class PhotoEditorViewModel: ObservableObject {
     }
 
     // MARK: - Undo management
+    func seedUndoBaselineIfNeeded(baseline: PhotoEditState = PhotoEditState()) {
+        // Seed a single undo step to baseline on fresh sessions
+        if undoStack.isEmpty && editState != baseline {
+            undoStack.append(baseline)
+            redoStack.removeAll()
+        }
+    }
+
     func beginChangeTransaction() {
         if !inChangeTransaction {
             undoStack.append(editState)
@@ -166,6 +174,19 @@ class PhotoEditorViewModel: ObservableObject {
     }
 
     func clearLastUndoMessage() { lastUndoMessage = nil }
+
+    // Load persistent history when opening editor
+    func loadPersistentUndoHistory(_ history: [PhotoEditState]) {
+        // Deduplicate consecutive equals and drop any trailing state equal to the current editState
+        var cleaned: [PhotoEditState] = []
+        cleaned.reserveCapacity(history.count)
+        for s in history {
+            if cleaned.last != s { cleaned.append(s) }
+        }
+        while let last = cleaned.last, last == editState { cleaned.removeLast() }
+        undoStack = cleaned
+        redoStack.removeAll()
+    }
 
     // MARK: - Diff helpers
     private func diffChangedKeys(from a: PhotoEditState, to b: PhotoEditState) -> [String] {
