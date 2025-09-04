@@ -18,8 +18,11 @@ struct RulerSlider: View {
 
     @GestureState private var dragOffset: CGFloat = 0
     @State private var isDragging = false
+    @State private var didNotifyBegin = false
     @State private var lastMajorIndexFeedback: Int? = nil
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
+    let onEditingBegan: (() -> Void)?
+    let onEditingEnded: (() -> Void)?
 
     init(
         value: Binding<Float>,
@@ -30,7 +33,9 @@ struct RulerSlider: View {
         thumbSize: CGFloat = 28,
         rulerHeight: CGFloat = 18,
         sliderHeight: CGFloat = 48,
-        format: @escaping (Float) -> String = { String(format: "%.0f", $0) }
+        format: @escaping (Float) -> String = { String(format: "%.0f", $0) },
+        onEditingBegan: (() -> Void)? = nil,
+        onEditingEnded: (() -> Void)? = nil
     ) {
         self._value = value
         self.range = range
@@ -41,6 +46,8 @@ struct RulerSlider: View {
         self.rulerHeight = rulerHeight
         self.sliderHeight = sliderHeight
         self.format = format
+        self.onEditingBegan = onEditingBegan
+        self.onEditingEnded = onEditingEnded
     }
 
     var body: some View {
@@ -100,6 +107,10 @@ struct RulerSlider: View {
                                 state = value.translation.width
                             }
                             .onChanged { gesture in
+                                if !isDragging {
+                                    onEditingBegan?()
+                                    didNotifyBegin = true
+                                }
                                 isDragging = true
                                 let sliderWidth = max(1, geo.size.width - leftInset - rightInset)
                                 // Corrige o cálculo para considerar a largura do thumb
@@ -140,6 +151,10 @@ struct RulerSlider: View {
                             }
                             .onEnded { _ in
                                 isDragging = false
+                                if didNotifyBegin {
+                                    onEditingEnded?()
+                                }
+                                didNotifyBegin = false
                                 lastMajorIndexFeedback = nil
                             }
                     )
@@ -171,6 +186,8 @@ struct PhotoEditorAdjustments: View {
     @Binding var isDualToneActive: Bool
     @Binding var colorTintIntensity: Float
     @Binding var colorTintFactor: Float
+    var onBeginAdjust: (() -> Void)? = nil
+    var onEndAdjust: (() -> Void)? = nil
     @State private var selectedAdjustment: String = "contrast"
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
 
@@ -257,25 +274,25 @@ struct PhotoEditorAdjustments: View {
 
             Group {
                 if selectedAdjustment == "contrast" {
-                    ContrastSlider(value: $contrast)
+                    ContrastSlider(value: $contrast, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "brightness" {
-                    BrightnessSlider(value: $brightness)
+                    BrightnessSlider(value: $brightness, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "exposure" {
-                    ExposureSlider(value: $exposure)
+                    ExposureSlider(value: $exposure, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "saturation" {
-                    SaturationSlider(value: $saturation)
+                    SaturationSlider(value: $saturation, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "vibrance" {
-                    VibranceSlider(value: $vibrance)
+                    VibranceSlider(value: $vibrance, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorInvert" {
                     InvertToggle(colorInvert: $colorInvert)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "pixelateAmount" {
-                    PixelateSlider(value: $pixelateAmount)
+                    PixelateSlider(value: $pixelateAmount, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorTint" {
                     ColorTintControls(
@@ -284,6 +301,8 @@ struct PhotoEditorAdjustments: View {
                         isDualToneActive: $isDualToneActive,
                         colorTintIntensity: $colorTintIntensity,
                         colorTintFactor: $colorTintFactor,
+                        onBeginAdjust: onBeginAdjust,
+                        onEndAdjust: onEndAdjust,
                         tintPresets: tintPresets
                     )
                     .padding(.horizontal)
@@ -340,6 +359,8 @@ private struct ColorTintControls: View {
     @Binding var isDualToneActive: Bool
     @Binding var colorTintIntensity: Float
     @Binding var colorTintFactor: Float
+    var onBeginAdjust: (() -> Void)? = nil
+    var onEndAdjust: (() -> Void)? = nil
     let tintPresets: [SIMD4<Float>]
 
     private func colorEquals(_ a: SIMD4<Float>, _ b: SIMD4<Float>, eps: Float = 0.01) -> Bool {
@@ -537,7 +558,9 @@ private struct ColorTintControls: View {
                 step: 1.0,
                 totalTicks: 101,
                 majorTickEvery: 10,
-                format: { String(format: "%d", Int($0)) }
+                format: { String(format: "%d", Int($0)) },
+                onEditingBegan: onBeginAdjust,
+                onEditingEnded: onEndAdjust
             )
         }
     }
@@ -575,6 +598,8 @@ private struct AdjustmentIconButton: View {
 
 private struct ContrastSlider: View {
     @Binding var value: Float
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
     var body: some View {
         // Mapeia 0...100 para 0.5...1.5
         RulerSlider(
@@ -586,13 +611,17 @@ private struct ContrastSlider: View {
             step: 1.0,
             totalTicks: 101,
             majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
+            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
         )
     }
 }
 
 private struct BrightnessSlider: View {
     @Binding var value: Float
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
     var body: some View {
         // Mapeia 0...100 para -0.5...0.5
         RulerSlider(
@@ -604,13 +633,17 @@ private struct BrightnessSlider: View {
             step: 1.0,
             totalTicks: 101,
             majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
+            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
         )
     }
 }
 
 private struct ExposureSlider: View {
     @Binding var value: Float
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
     var body: some View {
         // Mapeia 0...100 para -2.0...2.0
         RulerSlider(
@@ -622,13 +655,17 @@ private struct ExposureSlider: View {
             step: 1.0,
             totalTicks: 101,
             majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
+            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
         )
     }
 }
 
 private struct SaturationSlider: View {
     @Binding var value: Float
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
     var body: some View {
         // Mapeia 0...100 para 0.0...2.0
         RulerSlider(
@@ -640,13 +677,17 @@ private struct SaturationSlider: View {
             step: 1.0,
             totalTicks: 101,
             majorTickEvery: 10,
-            format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
+            format: { String(format: "%d", Int($0) * 2 - 100) }, // -100 a 100
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
         )
     }
 }
 
 private struct VibranceSlider: View {
     @Binding var value: Float
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
     var body: some View {
         // Mapeia 0...100 para -1.0...1.0
         RulerSlider(
@@ -658,7 +699,9 @@ private struct VibranceSlider: View {
             step: 1.0,
             totalTicks: 101,
             majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) } // -100 a 100
+            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
         )
     }
 }
@@ -697,6 +740,8 @@ private struct ColorInvertSlider: View {
 
 private struct PixelateSlider: View {
     @Binding var value: Float
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
     var body: some View {
         // Mapeia 0...100 para 1.0...40.0
         RulerSlider(
@@ -708,7 +753,9 @@ private struct PixelateSlider: View {
             step: 1.0,
             totalTicks: 101,
             majorTickEvery: 10,
-            format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
+            format: { String(format: "%d", Int($0) * 2 - 100) }, // -100 a 100
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
         )
     }
 }
@@ -732,4 +779,3 @@ private struct ColorTintSlider: View {
 }
 
 // Sliders de Duotone removidos
-

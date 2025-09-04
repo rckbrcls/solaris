@@ -33,7 +33,9 @@ struct PhotoEditorView: View {
             GeometryReader { geometry in
                 VStack(spacing: 0) {
                     PhotoEditorMainImage(
-                        image: $viewModel.previewBase,
+                        // Show the original image when there are no filters applied yet,
+                        // so the initial view is always full-quality.
+                        image: Binding(get: { viewModel.originalImage }, set: { _ in }),
                         filteredImage: $viewModel.previewImage,
                         matchedID: matchedID,
                         namespace: namespace,
@@ -59,7 +61,9 @@ struct PhotoEditorView: View {
                                     colorTintSecondary: $viewModel.editState.colorTintSecondary,
                                     isDualToneActive: $viewModel.editState.isDualToneActive,
                                     colorTintIntensity: $viewModel.editState.colorTintIntensity,
-                                    colorTintFactor: $viewModel.editState.colorTintFactor
+                                    colorTintFactor: $viewModel.editState.colorTintFactor,
+                                    onBeginAdjust: { viewModel.beginInteractiveAdjustments() },
+                                    onEndAdjust: { viewModel.endInteractiveAdjustments() }
                                 )
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                             case "sticker":
@@ -138,8 +142,8 @@ struct PhotoEditorView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     // Restaura a imagem original e reseta todos os ajustes
-                    if let original = viewModel.originalImage {
-                        viewModel.previewBase = original.resizeToFit(maxSize: 1024)
+                    if let _ = viewModel.originalImage {
+                        viewModel.resetPreviewBases()
                         viewModel.editState = PhotoEditState() // Reset total
                     }
                 }) {
@@ -153,4 +157,3 @@ struct PhotoEditorView: View {
 #Preview {
     ContentView()
 }
-

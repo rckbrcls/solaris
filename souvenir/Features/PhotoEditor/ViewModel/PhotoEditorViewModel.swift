@@ -11,6 +11,7 @@ import UIKit
 import CoreImage
 import MetalPetal
 import os.log
+import CoreGraphics
 
 struct PhotoEditState: Codable, Equatable {
     var contrast: Float = 1.0
@@ -38,13 +39,16 @@ class PhotoEditorViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
     public var previewBase: UIImage?
+    private var previewBaseHigh: UIImage?
+    private var previewBaseLow: UIImage?
+    @Published var isInteracting: Bool = false
 
     // Adiciona referência à imagem original em alta qualidade
     public var originalImage: UIImage?
 
     init(image: UIImage?) {
         self.originalImage = image // Mantém a original para exportação final
-        self.previewBase = image?.resizeToFit(maxSize: 1024)
+        buildPreviewBases()
         if let base = self.previewBase {
             print("[PhotoEditorViewModel] previewBase size: \(base.size), scale: \(base.scale)")
             if let cg = base.cgImage {
@@ -60,6 +64,45 @@ class PhotoEditorViewModel: ObservableObject {
                 self?.generatePreview(state: state)
             }
             .store(in: &cancellables)
+    }
+
+    func buildPreviewBases() {
+        // High-quality preview for crisp zoom (e.g., up to 3x)
+        let highPoints = PhotoEditorHelper.suggestedPreviewMaxPoints(doubleTapZoomScale: 3.0)
+        // Low-quality preview for responsive sliding (lighter to render)
+        let lowPoints = PhotoEditorHelper.suggestedPreviewMaxPoints(doubleTapZoomScale: 2.0)
+        self.previewBaseHigh = originalImage?.resizeToFit(maxSize: highPoints)
+        self.previewBaseLow = originalImage?.resizeToFit(maxSize: lowPoints)
+        // Start with high by default
+        self.previewBase = self.previewBaseHigh
+        if let base = self.previewBase {
+            print("[PhotoEditorViewModel] previewBase size: \(base.size), scale: \(base.scale)")
+            if let cg = base.cgImage {
+                print("[PhotoEditorViewModel] previewBase alphaInfo: \(cg.alphaInfo), bitsPerPixel: \(cg.bitsPerPixel)")
+            }
+        } else {
+            print("[PhotoEditorViewModel] previewBase is nil after resizeToFit")
+        }
+    }
+
+    func beginInteractiveAdjustments() {
+        guard !isInteracting else { return }
+        isInteracting = true
+        if let low = previewBaseLow { previewBase = low }
+    }
+
+    func endInteractiveAdjustments() {
+        isInteracting = false
+        if let high = previewBaseHigh { previewBase = high }
+        // Regerar preview final em alta
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            self.generatePreview(state: self.editState)
+        }
+    }
+
+    func resetPreviewBases() {
+        buildPreviewBases()
     }
 
     /// Gera a imagem final em alta qualidade com todos os ajustes aplicados

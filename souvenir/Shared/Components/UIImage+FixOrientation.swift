@@ -19,6 +19,10 @@ extension UIImage {
     }
     
     func resizeToFit(maxSize: CGFloat) -> UIImage? {
+        // Avoid upscaling: if already within bounds, just ensure alpha safety
+        if max(size.width, size.height) <= maxSize {
+            return self.withAlpha()
+        }
         let aspectRatio = size.width / size.height
         var newSize: CGSize
         if size.width > size.height {
@@ -26,7 +30,10 @@ extension UIImage {
         } else {
             newSize = CGSize(width: maxSize * aspectRatio, height: maxSize)
         }
-        UIGraphicsBeginImageContextWithOptions(newSize, false, scale)
+        // Use device scale to ensure pixel density matches the screen
+        // This keeps previews crisp relative to zoom and device scale.
+        let deviceScale = UIScreen.main.scale
+        UIGraphicsBeginImageContextWithOptions(newSize, false, deviceScale)
         draw(in: CGRect(origin: .zero, size: newSize))
         let resized = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
