@@ -26,51 +26,60 @@ struct PhotosScrollView<PhotoType>: View {
     var body: some View {
         VStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
-                    PhotosPicker(selection: $selectedItems,
-                                 maxSelectionCount: 6,
-                                 matching: .images) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(UIColor.systemGray5))
-                            .aspectRatio(1, contentMode: .fit)
-                            .overlay(
+                GeometryReader { geo in
+                    // Grid fixa em 3 colunas. Células 100% quadradas e do mesmo tamanho.
+                    let columnsCount: Int = 3
+                    let spacing: CGFloat = 10
+                    let sidePadding: CGFloat = 16
+                    let totalWidth = geo.size.width - (sidePadding * 2)
+                    let cellSize = floor((totalWidth - (CGFloat(columnsCount - 1) * spacing)) / CGFloat(columnsCount))
+
+                    let columns = Array(repeating: GridItem(.fixed(cellSize), spacing: spacing), count: columnsCount)
+
+                    LazyVGrid(columns: columns, spacing: spacing) {
+                        // Primeiro item: botão de import
+                        PhotosPicker(selection: $selectedItems,
+                                     maxSelectionCount: 6,
+                                     matching: .images) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(UIColor.systemGray5))
                                 Image(systemName: "plus")
                                     .foregroundColor(Color(UIColor.systemGray))
-                                    .font(.system(size: 30))
-                            )
-                            .frame(width: 100, height: 100)
-                    }
+                                    .font(.system(size: 28))
+                            }
+                            .frame(width: cellSize, height: cellSize)
+                        }
 
-                    ForEach(photos.indices, id: \ .self) { index in
-                        PhotoGridItem(
-                            photo: getImage(photos[index]),
-                            index: index,
-                            ns: ns,
-                            isSelected: selectedPhotoIndices.contains(index),
-                            onLongPress: {
-                                let generator = UIImpactFeedbackGenerator(style: .medium)
-                                generator.impactOccurred()
-                                _ = withAnimation {
-                                    selectedPhotoIndices.insert(index)
-                                }
-                            },
-                            onTap: {
-                                if selectedPhotoIndices.isEmpty {
-                                    onPhotoSelected(index)
-                                } else {
-                                    withAnimation {
-                                        if selectedPhotoIndices.contains(index) {
-                                            selectedPhotoIndices.remove(index)
-                                        } else {
-                                            selectedPhotoIndices.insert(index)
+                        // Demais itens: thumbnails padronizadas
+                        ForEach(photos.indices, id: \.self) { index in
+                            PhotoGridItem(
+                                photo: getImage(photos[index]),
+                                index: index,
+                                ns: ns,
+                                isSelected: selectedPhotoIndices.contains(index),
+                                onLongPress: {
+                                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                                    generator.impactOccurred()
+                                    _ = withAnimation { selectedPhotoIndices.insert(index) }
+                                },
+                                onTap: {
+                                    if selectedPhotoIndices.isEmpty { onPhotoSelected(index) }
+                                    else {
+                                        withAnimation {
+                                            if selectedPhotoIndices.contains(index) { selectedPhotoIndices.remove(index) }
+                                            else { selectedPhotoIndices.insert(index) }
                                         }
                                     }
                                 }
-                            }
-                        )
+                            )
+                            .frame(width: cellSize, height: cellSize)
+                        }
                     }
+                    .padding(.horizontal, sidePadding)
+                    .padding(.vertical, 12)
                 }
-                .padding()
+                .frame(height: 0) // evita ocupar altura infinita; o conteúdo do grid determina o scroll
             }
             if !selectedPhotoIndices.isEmpty {
                 HStack {

@@ -42,11 +42,29 @@ final class PhotoLibrary {
     func loadManifest() -> PhotoManifest {
         ensureDirs()
         let url = manifestURL()
-        guard let data = try? Data(contentsOf: url) else { return PhotoManifest() }
-        if let manifest = try? JSONDecoder().decode(PhotoManifest.self, from: data) {
-            return manifest
+        guard let data = try? Data(contentsOf: url),
+              let manifest = try? JSONDecoder().decode(PhotoManifest.self, from: data) else {
+            return PhotoManifest()
         }
-        return PhotoManifest()
+        // Normaliza caminhos absolutos antigos para o diretório atual do app
+        let root = storageRoot().path
+        let fm = FileManager.default
+        func fixURL(_ old: URL, in subdir: URL) -> URL {
+            let fname = old.lastPathComponent
+            let candidate = subdir.appendingPathComponent(fname)
+            return candidate
+        }
+        let normalizedItems: [PhotoRecord] = manifest.items.compactMap { rec in
+            var r = rec
+            // Reaponta se estiver fora do container atual
+            if !r.originalURL.path.hasPrefix(root) { r.originalURL = fixURL(r.originalURL, in: originalsDir()) }
+            if !r.thumbURL.path.hasPrefix(root) { r.thumbURL = fixURL(r.thumbURL, in: thumbsDir()) }
+            if let e = r.editedURL, !e.path.hasPrefix(root) { r.editedURL = fixURL(e, in: editsDir()) }
+            // Filtra itens cujos arquivos não existem mais (aplicativo reinstalado, etc.)
+            guard fm.fileExists(atPath: r.originalURL.path) else { return nil }
+            return r
+        }
+        return PhotoManifest(items: normalizedItems)
     }
 
     func saveManifest(_ manifest: PhotoManifest) throws {
@@ -69,4 +87,3 @@ final class PhotoLibrary {
         }
     }
 }
-
