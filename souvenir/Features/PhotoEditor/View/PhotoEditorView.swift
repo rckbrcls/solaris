@@ -1,6 +1,31 @@
 import SwiftUI
 import UIKit
 
+// Circular neutral icon style (match camera buttons)
+private struct EditorIconButtonStyle: ViewModifier {
+    var size: CGFloat = 44
+    var background: Material = .ultraThinMaterial
+    var foreground: Color = .primary
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundColor(foreground)
+            .frame(width: size, height: size)
+            .background(background, in: Circle())
+            .overlay(
+                Circle()
+                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+            )
+            .contentShape(Circle())
+    }
+}
+
+private extension View {
+    func editorIconStyle(size: CGFloat = 44, background: Material = .ultraThinMaterial) -> some View {
+        self.modifier(EditorIconButtonStyle(size: size, background: background))
+    }
+}
+
 
 struct PhotoEditorView: View {
     @State private var isSaving: Bool = false
@@ -87,6 +112,36 @@ struct PhotoEditorView: View {
                 }
             }
             LoadingOverlay(isVisible: $isSaving, title: "Salvando edição...")
+            // Top controls (match camera style)
+            VStack {
+                HStack {
+                    Button(action: {
+                        if hasChanges {
+                            showSaveDiscardModal = true
+                        } else {
+                            onFinishEditing?(nil, nil, false)
+                            dismiss()
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .editorIconStyle()
+                    }
+                    Spacer()
+                    Button(action: {
+                        // Restaura a imagem original e reseta todos os ajustes
+                        if let _ = viewModel.originalImage {
+                            viewModel.resetPreviewBases()
+                            viewModel.editState = PhotoEditState()
+                        }
+                    }) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .editorIconStyle()
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                Spacer()
+            }
         }
         // Modal de salvar/descartar ao tentar voltar
         .confirmationDialog("Salvar alterações?", isPresented: $showSaveDiscardModal, titleVisibility: .visible) {
@@ -117,31 +172,7 @@ struct PhotoEditorView: View {
         .onChange(of: viewModel.editState) { newValue in
             hasChanges = (newValue != initialEditState)
         }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    if hasChanges {
-                        showSaveDiscardModal = true
-                    } else {
-                        onFinishEditing?(nil, nil, false)
-                        dismiss()
-                    }
-                }) {
-                    Label("Voltar", systemImage: "chevron.left")
-                }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    // Restaura a imagem original e reseta todos os ajustes
-                    if let _ = viewModel.originalImage {
-                        viewModel.resetPreviewBases()
-                        viewModel.editState = PhotoEditState() // Reset total
-                    }
-                }) {
-                    Label("Reverter", systemImage: "arrow.uturn.backward")
-                }
-            }
-        }
+        .toolbar { } // remove default toolbar items
     }
 }
 

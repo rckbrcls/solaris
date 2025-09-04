@@ -36,14 +36,17 @@ struct PhotoCaptureView: View {
     @State private var isGridOn: Bool = false
     @State private var zoomFactor: CGFloat = 1.0
     @Environment(\.dismiss) var dismiss
-    @State private var dragOffsetY: CGFloat = 0
+    @State private var isDraggingDismiss: Bool = false
     
     var body: some View {
-        VStack {
-            ZStack {
-                CameraPreview(capturedImage: $capturedImage, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor)
-                    .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 16.0 / 9.0)
-                    .cornerRadius(20)
+        ZStack {
+            Color(UIColor.systemBackground).ignoresSafeArea()
+            VStack {
+                ZStack {
+                    CameraPreview(capturedImage: $capturedImage, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor)
+                        .allowsHitTesting(!isDraggingDismiss)
+                        .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 16.0 / 9.0)
+                        .cornerRadius(20)
                 
                 if isGridOn {
                     GeometryReader { geo in
@@ -134,30 +137,32 @@ struct PhotoCaptureView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             
-            Spacer()
-        }
-        .navigationBarBackButtonHidden(true)
-        .onChange(of: capturedImage) { newImage in
-            if let image = newImage {
-                onPhotoCaptured(image.fixOrientation())
+                Spacer()
             }
-        }
-        .padding(.top)
-        .offset(y: dragOffsetY)
-        .gesture(
-            DragGesture()
-                .onChanged { value in
-                    // only track downward drags to avoid conflict with other gestures
-                    dragOffsetY = max(0, value.translation.height)
+            .navigationBarBackButtonHidden(true)
+            .onChange(of: capturedImage) { newImage in
+                if let image = newImage {
+                    onPhotoCaptured(image.fixOrientation())
                 }
-                .onEnded { _ in
-                    if dragOffsetY > 120 {
-                        dismiss()
+            }
+            .padding(.top)
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 20)
+                    .onChanged { value in
+                        // Apenas sinaliza que está arrastando para evitar conflitos de gesto do preview
+                        if value.translation.height > 0 { isDraggingDismiss = true }
                     }
-                    dragOffsetY = 0
-                }
-        )
-        .tint(.primary)
+                    .onEnded { value in
+                        defer { isDraggingDismiss = false }
+                        let threshold: CGFloat = 120
+                        if value.translation.height > threshold {
+                            // Não anima o conteúdo; apenas faz o mesmo dismiss do botão (animação do sistema)
+                            dismiss()
+                        }
+                    }
+            )
+            .tint(.primary)
+        }
     }
 }
 
