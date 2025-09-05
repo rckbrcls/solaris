@@ -161,10 +161,13 @@ class PhotoEditorViewModel: ObservableObject {
     }
 
     func resetAllEditsToClean() {
-        undoStack.removeAll()
-        redoStack.removeAll()
+        // Make the full reset redoable as a single step
         let clean = PhotoEditState()
         if editState != clean {
+            let previous = editState
+            // Clear undo history and set redo to restore the whole previous state
+            undoStack.removeAll()
+            redoStack = [previous]
             editState = clean
             lastUndoMessage = "Revertido: todos os ajustes"
         } else {
