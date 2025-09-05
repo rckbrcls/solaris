@@ -181,6 +181,8 @@ struct PhotoEditorAdjustments: View {
     @Binding var vibrance: Float
     @Binding var colorInvert: Float
     @Binding var pixelateAmount: Float
+    @Binding var grain: Float
+    @Binding var grainSize: Float
     @Binding var colorTint: SIMD4<Float>
     @Binding var colorTintSecondary: SIMD4<Float>
     @Binding var isDualToneActive: Bool
@@ -218,6 +220,7 @@ struct PhotoEditorAdjustments: View {
         Adjustment(id: "exposure", label: "Exposição", icon: "sunrise"),
         Adjustment(id: "saturation", label: "Saturação", icon: "drop"),
         Adjustment(id: "vibrance", label: "Vibrance", icon: "waveform.path.ecg"),
+        Adjustment(id: "grain", label: "Grão (Film)", icon: "circle.grid.cross"),
         Adjustment(id: "colorInvert", label: "Inverter", icon: "circle.righthalf.filled"),
         Adjustment(id: "pixelateAmount", label: "Pixelizar", icon: "rectangle.split.3x3"),
         Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette")
@@ -230,6 +233,7 @@ struct PhotoEditorAdjustments: View {
         case "exposure": return exposure != 0.0
         case "saturation": return saturation != 1.0
         case "vibrance": return vibrance != 0.0
+        case "grain": return grain > 0.0
         case "colorInvert": return colorInvert == 1.0
         case "pixelateAmount": return pixelateAmount != 1.0
         case "colorTint": return !(colorTint.x == 0.0 && colorTint.y == 0.0 && colorTint.z == 0.0 && colorTint.w == 0.0)
@@ -294,6 +298,12 @@ struct PhotoEditorAdjustments: View {
                 } else if selectedAdjustment == "pixelateAmount" {
                     PixelateSlider(value: $pixelateAmount, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
+                } else if selectedAdjustment == "grain" {
+                    VStack(spacing: 10) {
+                        GrainSlider(value: $grain, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                        GrainSizeSlider(value: $grainSize, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    }
+                    .padding(.horizontal)
                 } else if selectedAdjustment == "colorTint" {
                     ColorTintControls(
                         colorTint: $colorTint,
@@ -808,6 +818,50 @@ private struct PixelateSlider: View {
             totalTicks: 101,
             majorTickEvery: 10,
             format: { String(format: "%d", Int($0) * 2 - 100) }, // -100 a 100
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
+        )
+    }
+}
+
+private struct GrainSlider: View {
+    @Binding var value: Float // 0.0 ... 0.1 (UI shows 0..100)
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
+    var body: some View {
+        // Map 0...100 -> 0.0...0.1
+        RulerSlider(
+            value: Binding(
+                get: { (value * 1000).rounded() },
+                set: { value = $0 / 1000 }
+            ),
+            range: 0...100,
+            step: 1.0,
+            totalTicks: 101,
+            majorTickEvery: 10,
+            format: { String(format: "%d", Int($0)) },
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
+        )
+    }
+}
+
+private struct GrainSizeSlider: View {
+    @Binding var value: Float // 0.0 ... 1.0
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
+    var body: some View {
+        // Map 0...100 -> 0.0...1.0 (fine → coarse)
+        RulerSlider(
+            value: Binding(
+                get: { (value * 100).rounded() },
+                set: { value = $0 / 100 }
+            ),
+            range: 0...100,
+            step: 1.0,
+            totalTicks: 101,
+            majorTickEvery: 10,
+            format: { String(format: "%d", Int($0)) },
             onEditingBegan: onBegin,
             onEditingEnded: onEnd
         )

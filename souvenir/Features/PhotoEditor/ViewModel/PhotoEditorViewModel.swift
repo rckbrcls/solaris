@@ -22,6 +22,10 @@ struct PhotoEditState: Codable, Equatable {
     var opacity: Float = 1.0 // valor padrão neutro (totalmente opaco)
     var colorInvert: Float = 0.0 // valor padrão neutro (sem inversão)
     var pixelateAmount: Float = 1.0 // valor padrão neutro (sem pixelate)
+    // Film grain (0.0 - 0.1 recomendado)
+    var grain: Float = 0.0
+    // Film grain size (0.0 fine → 1.0 coarse)
+    var grainSize: Float = 0.0
     // Color tint (RGBA, valores de 0 a 1)
     var colorTint: SIMD4<Float> = SIMD4<Float>(0,0,0,0) // padrão: sem cor
     var colorTintIntensity: Float = 1.0 // valor médio para que o slider fique no meio
@@ -213,6 +217,8 @@ class PhotoEditorViewModel: ObservableObject {
         if changed(a.opacity, b.opacity) { keys.append("opacity") }
         if changed(a.colorInvert, b.colorInvert) { keys.append("colorInvert") }
         if changed(a.pixelateAmount, b.pixelateAmount) { keys.append("pixelateAmount") }
+        if changed(a.grain, b.grain) { keys.append("grain") }
+        if changed(a.grainSize, b.grainSize) { keys.append("grainSize") }
         if colorChanged(a.colorTint, b.colorTint) { keys.append("colorTint") }
         if colorChanged(a.colorTintSecondary, b.colorTintSecondary) { keys.append("colorTintSecondary") }
         if changed(a.colorTintIntensity, b.colorTintIntensity) { keys.append("colorTintIntensity") }
@@ -232,6 +238,8 @@ class PhotoEditorViewModel: ObservableObject {
             "opacity": "Opacidade",
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
+            "grain": "Grão",
+            "grainSize": "Tamanho do Grão",
             "colorTint": "Tint",
             "colorTintSecondary": "Tint Secundário",
             "colorTintIntensity": "Intensidade do Tint",
@@ -257,6 +265,8 @@ class PhotoEditorViewModel: ObservableObject {
             "opacity": "Opacidade",
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
+            "grain": "Grão",
+            "grainSize": "Tamanho do Grão",
             "colorTint": "Tint",
             "colorTintSecondary": "Tint Secundário",
             "colorTintIntensity": "Intensidade do Tint",
@@ -442,7 +452,7 @@ class PhotoEditorViewModel: ObservableObject {
         }
         // Inversão de cores opcional (sem duotone)
         let baseImageForInvert = tintedImage
-        let finalImage: MTIImage
+        var finalImage: MTIImage
         if state.colorInvert > 0.0 {
             let invertFilter = MTIColorInvertFilter()
             invertFilter.inputImage = baseImageForInvert
@@ -459,6 +469,96 @@ class PhotoEditorViewModel: ObservableObject {
             }
         } else {
             finalImage = baseImageForInvert
+        }
+
+        // Film grain: linear-space additive zero-mean; size via scaled sampling (monochrome, no hue shift)
+        if state.grain > 0.0 {
+            let baseK = max(0.0, min(1.0, state.grain * 10.0))
+            let shapedK = Float(pow(Double(baseK), 0.7)) // more punch near the end
+            let sMax: CGFloat = 8.0
+            let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
+            let ampBoost = CGFloat(pow(Double(scaleFactor), 0.6)) // compensate perceived loss at larger grain
+            let k = min(1.0, Float(ampBoost) * shapedK * 1.2)
+            let scaleNorm = Float(max(0.0, min(1.0, (scaleFactor - 1.0) / (sMax - 1.0))))
+            let noiseGain = Float(2.5 + 2.5 * scaleNorm) // 2.5x..5.0x
+            let extent = CGRect(origin: .zero, size: finalImage.size)
+            var scaledNoise: CIImage? = nil
+            if let tex = UIImage(named: "film_grain"), let baseTile = CIImage(image: tex) {
+                // Ensure monochrome
+                let mono = CIFilter(name: "CIColorControls")
+                mono?.setValue(baseTile, forKey: kCIInputImageKey)
+                mono?.setValue(0.0, forKey: kCIInputSaturationKey)
+                mono?.setValue(NSNumber(value: 1.8 + 0.7 * Double(scaleNorm)), forKey: kCIInputContrastKey)
+                let tileMono = (mono?.outputImage ?? baseTile)
+                // Random offset to avoid visible seams
+                let tw = max(1.0, tileMono.extent.width * scaleFactor)
+                let th = max(1.0, tileMono.extent.height * scaleFactor)
+                let offX = CGFloat.random(in: 0..<tw)
+                let offY = CGFloat.random(in: 0..<th)
+                let transform = CGAffineTransform.identity
+                    .scaledBy(x: scaleFactor, y: scaleFactor)
+                    .translatedBy(x: offX, y: offY)
+                if let tile = CIFilter(name: "CIAffineTile") {
+                    tile.setValue(tileMono, forKey: kCIInputImageKey)
+                    tile.setValue(NSValue(cgAffineTransform: transform), forKey: kCIInputTransformKey)
+                    scaledNoise = (tile.outputImage ?? tileMono).cropped(to: extent)
+                }
+            }
+            if scaledNoise == nil, let random = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
+                // Monochrome procedural fallback
+                let mono = CIFilter(name: "CIColorControls")
+                mono?.setValue(random, forKey: kCIInputImageKey)
+                mono?.setValue(0.0, forKey: kCIInputSaturationKey)
+                mono?.setValue(NSNumber(value: 1.8 + 0.7 * Double(scaleNorm)), forKey: kCIInputContrastKey)
+                let baseNoise = (mono?.outputImage ?? random)
+                if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
+                    lanczos.setValue(baseNoise, forKey: kCIInputImageKey)
+                    lanczos.setValue(scaleFactor, forKey: kCIInputScaleKey)
+                    lanczos.setValue(1.0, forKey: kCIInputAspectRatioKey)
+                    scaledNoise = (lanczos.outputImage ?? baseNoise).cropped(to: extent)
+                } else {
+                    let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
+                    scaledNoise = baseNoise.transformed(by: t).cropped(to: extent)
+                }
+            }
+            if let scaledNoise = scaledNoise {
+                // Convert base and noise to linear
+                let toLinear1 = MTIRGBColorSpaceConversionFilter()
+                toLinear1.inputColorSpace = .sRGB
+                toLinear1.outputColorSpace = .linearSRGB
+                toLinear1.outputAlphaType = .alphaIsOne
+                toLinear1.inputImage = finalImage
+                guard let baseLinear = toLinear1.outputImage else { return nil }
+                let noiseMTI_sRGB = MTIImage(ciImage: scaledNoise, isOpaque: true)
+                let toLinear2 = MTIRGBColorSpaceConversionFilter()
+                toLinear2.inputColorSpace = .sRGB
+                toLinear2.outputColorSpace = .linearSRGB
+                toLinear2.outputAlphaType = .alphaIsOne
+                toLinear2.inputImage = noiseMTI_sRGB
+                guard let noiseLinear = toLinear2.outputImage else { return nil }
+                // Center noise to zero-mean: (noise - 0.5)
+                let cm = MTIColorMatrixFilter()
+                cm.inputImage = noiseLinear
+                cm.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1)), bias: SIMD4<Float>(-0.5,-0.5,-0.5,0))
+                guard let centeredNoise = cm.outputImage else { return nil }
+                let gainF = MTIColorMatrixFilter(); gainF.inputImage = centeredNoise
+                gainF.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(noiseGain, noiseGain, noiseGain, 1)), bias: SIMD4<Float>(0,0,0,0))
+                guard let amplifiedNoise = gainF.outputImage else { return nil }
+                // Add zero-mean noise scaled by k: base + k*centeredNoise
+                let add = MTIBlendFilter(blendMode: .add)
+                add.inputImage = amplifiedNoise
+                add.inputBackgroundImage = baseLinear
+                add.intensity = k
+                add.outputAlphaType = .alphaIsOne
+                guard let linearOut = add.outputImage else { return nil }
+                // Back to sRGB
+                let toSRGB = MTIRGBColorSpaceConversionFilter()
+                toSRGB.inputColorSpace = .linearSRGB
+                toSRGB.outputColorSpace = .sRGB
+                toSRGB.outputAlphaType = .alphaIsOne
+                toSRGB.inputImage = linearOut
+                if let out = toSRGB.outputImage { finalImage = out }
+            }
         }
         do {
             let cgimg = try mtiContext.makeCGImage(from: finalImage)
@@ -625,7 +725,7 @@ class PhotoEditorViewModel: ObservableObject {
         
         // Filtro de inversão de cores (quando colorInvert > 0)
         let baseImageForInvert = tintedImage
-        let finalImage: MTIImage
+        var finalImage: MTIImage
         if state.colorInvert > 0.0 {
             let invertFilter = MTIColorInvertFilter()
             invertFilter.inputImage = baseImageForInvert
@@ -643,6 +743,70 @@ class PhotoEditorViewModel: ObservableObject {
             }
         } else {
             finalImage = baseImageForInvert
+        }
+
+        // Film grain: linear-space additive zero-mean; size via scaled sampling (monochrome, no hue shift)
+        if state.grain > 0.0 {
+            let baseK = max(0.0, min(1.0, state.grain * 10.0))
+            let shapedK = Float(pow(Double(baseK), 0.7))
+            let sMax: CGFloat = 8.0
+            let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
+            let ampBoost = CGFloat(pow(Double(scaleFactor), 0.6))
+            let k = min(1.0, Float(ampBoost) * shapedK * 1.2)
+            let scaleNorm = Float(max(0.0, min(1.0, (scaleFactor - 1.0) / (sMax - 1.0))))
+            let noiseGain = Float(2.5 + 2.5 * scaleNorm)
+            let extent = CGRect(origin: .zero, size: finalImage.size)
+            if let random = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
+                let mono = CIFilter(name: "CIColorControls")
+                mono?.setValue(random, forKey: kCIInputImageKey)
+                mono?.setValue(0.0, forKey: kCIInputSaturationKey)
+                mono?.setValue(NSNumber(value: 1.8 + 0.7 * Double(scaleNorm)), forKey: kCIInputContrastKey)
+                let baseNoise = (mono?.outputImage ?? random)
+                let scaledNoise: CIImage
+                if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
+                    lanczos.setValue(baseNoise, forKey: kCIInputImageKey)
+                    lanczos.setValue(scaleFactor, forKey: kCIInputScaleKey)
+                    lanczos.setValue(1.0, forKey: kCIInputAspectRatioKey)
+                    scaledNoise = (lanczos.outputImage ?? baseNoise).cropped(to: extent)
+                } else {
+                    let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
+                    scaledNoise = baseNoise.transformed(by: t).cropped(to: extent)
+                }
+                
+                // Convert to linear
+                let toLinear1 = MTIRGBColorSpaceConversionFilter()
+                toLinear1.inputColorSpace = .sRGB
+                toLinear1.outputColorSpace = .linearSRGB
+                toLinear1.outputAlphaType = .alphaIsOne
+                toLinear1.inputImage = finalImage
+                guard let baseLinear = toLinear1.outputImage else { return }
+                let noiseMTI_sRGB = MTIImage(ciImage: scaledNoise, isOpaque: true)
+                let toLinear2 = MTIRGBColorSpaceConversionFilter()
+                toLinear2.inputColorSpace = .sRGB
+                toLinear2.outputColorSpace = .linearSRGB
+                toLinear2.outputAlphaType = .alphaIsOne
+                toLinear2.inputImage = noiseMTI_sRGB
+                guard let noiseLinear = toLinear2.outputImage else { return }
+                let cm = MTIColorMatrixFilter()
+                cm.inputImage = noiseLinear
+                cm.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1)), bias: SIMD4<Float>(-0.5,-0.5,-0.5,0))
+                guard let centeredNoise = cm.outputImage else { return }
+                let gainF = MTIColorMatrixFilter(); gainF.inputImage = centeredNoise
+                gainF.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(noiseGain, noiseGain, noiseGain, 1)), bias: SIMD4<Float>(0,0,0,0))
+                guard let amplifiedNoise = gainF.outputImage else { return }
+                let add = MTIBlendFilter(blendMode: .add)
+                add.inputImage = amplifiedNoise
+                add.inputBackgroundImage = baseLinear
+                add.intensity = k
+                add.outputAlphaType = .alphaIsOne
+                guard let linearOut = add.outputImage else { return }
+                let toSRGB = MTIRGBColorSpaceConversionFilter()
+                toSRGB.inputColorSpace = .linearSRGB
+                toSRGB.outputColorSpace = .sRGB
+                toSRGB.outputAlphaType = .alphaIsOne
+                toSRGB.inputImage = linearOut
+                if let out = toSRGB.outputImage { finalImage = out }
+            }
         }
 
         // Geração final do preview (sem duotone)

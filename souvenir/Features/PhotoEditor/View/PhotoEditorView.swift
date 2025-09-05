@@ -152,7 +152,7 @@ private extension PhotoEditorView {
                 selectedCategory: $selectedCategory,
                 bottomSize: $bottomSize
             )
-            .padding(.bottom, 8)
+            .padding(.bottom, 16)
         }
         .padding(.top, 10)
         .padding(.bottom, 6)
@@ -191,6 +191,8 @@ private extension PhotoEditorView {
                 vibrance: $viewModel.editState.vibrance,
                 colorInvert: $viewModel.editState.colorInvert,
                 pixelateAmount: $viewModel.editState.pixelateAmount,
+                grain: $viewModel.editState.grain,
+                grainSize: $viewModel.editState.grainSize,
                 colorTint: $viewModel.editState.colorTint,
                 colorTintSecondary: $viewModel.editState.colorTintSecondary,
                 isDualToneActive: $viewModel.editState.isDualToneActive,
