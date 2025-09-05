@@ -41,6 +41,8 @@ struct PhotoEditState: Codable, Equatable {
     // Dual tone support
     var colorTintSecondary: SIMD4<Float> = SIMD4<Float>(0,0,0,0) // segunda cor para dual tone
     var isDualToneActive: Bool = false // indica se o dual tone está ativo
+    // Skin tone (ajuste seletivo de calor/frieza em tons de pele) -1.0 (mais frio) .. 1.0 (mais quente)
+    var skinTone: Float = 0.0
     // Duotone removido
     // Adicione outros parâmetros depois
 }
@@ -236,6 +238,7 @@ class PhotoEditorViewModel: ObservableObject {
         if changed(a.colorTintIntensity, b.colorTintIntensity) { keys.append("colorTintIntensity") }
         if changed(a.colorTintFactor, b.colorTintFactor) { keys.append("colorTintFactor") }
         if a.isDualToneActive != b.isDualToneActive { keys.append("isDualToneActive") }
+    if changed(a.skinTone, b.skinTone) { keys.append("skinTone") }
         return keys
     }
 
@@ -260,7 +263,8 @@ class PhotoEditorViewModel: ObservableObject {
             "colorTintSecondary": "Tint Secundário",
             "colorTintIntensity": "Intensidade do Tint",
             "colorTintFactor": "Força do Tint",
-            "isDualToneActive": "Dual Tone"
+            "isDualToneActive": "Dual Tone",
+            "skinTone": "Tom de Pele"
         ]
         if keys.count == 1 {
             return "Revertido: \(names[keys[0]] ?? keys[0])"
@@ -291,7 +295,8 @@ class PhotoEditorViewModel: ObservableObject {
             "colorTintSecondary": "Tint Secundário",
             "colorTintIntensity": "Intensidade do Tint",
             "colorTintFactor": "Força do Tint",
-            "isDualToneActive": "Dual Tone"
+            "isDualToneActive": "Dual Tone",
+            "skinTone": "Tom de Pele"
         ]
         if keys.count == 1 {
             return "Restaurado: \(names[keys[0]] ?? keys[0])"
@@ -427,7 +432,7 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             sharpenedImage_final = clarityImage_final
         }
-        let tintedImage: MTIImage
+    let tintedImage: MTIImage
         if state.colorTint.x > 0.0 || state.colorTint.y > 0.0 || state.colorTint.z > 0.0 {
             if state.isDualToneActive && (state.colorTintSecondary.x > 0.0 || state.colorTintSecondary.y > 0.0 || state.colorTintSecondary.z > 0.0) {
                 // Dual tone real: mapeia luminância para duas cores
@@ -510,8 +515,63 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             tintedImage = sharpenedImage_final
         }
+        // Skin tone adjustment (final image) – com máscara de saturação para evitar brancos
+        let tintedImageWithSkin: MTIImage
+        if abs(state.skinTone) > 0.001 {
+            let amount = max(-1.0, min(1.0, state.skinTone))
+            let k = pow(abs(amount), 0.85)
+            
+            // Primeiro aplica o bias em uma imagem separada
+            let biasedImage: MTIImage
+            if amount > 0 { // Âmbar (mais dourado/vermelho)
+                let biasR: Float = 0.050 * k
+                let biasG: Float = 0.020 * k
+                let biasB: Float = -0.035 * k
+                let matrixFilter = MTIColorMatrixFilter()
+                matrixFilter.inputImage = tintedImage
+                let mat = simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1))
+                matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: SIMD4<Float>(biasR, biasG, biasB, 0))
+                biasedImage = matrixFilter.outputImage ?? tintedImage
+            } else { // Avermelhado / rosado
+                let biasR: Float = 0.045 * k
+                let biasG: Float = -0.018 * k
+                let biasB: Float = 0.020 * k
+                let matrixFilter = MTIColorMatrixFilter()
+                matrixFilter.inputImage = tintedImage
+                let mat = simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1))
+                matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: SIMD4<Float>(biasR, biasG, biasB, 0))
+                biasedImage = matrixFilter.outputImage ?? tintedImage
+            }
+            
+            // Aplica skin tone de forma mais suave usando luminance
+            let luminanceFilter = MTIColorMatrixFilter()
+            luminanceFilter.inputImage = tintedImage
+            // Matriz para extrair luminance (RGB to grayscale)
+            let luminanceMatrix = simd_float4x4(
+                SIMD4<Float>(0.299, 0.299, 0.299, 0),
+                SIMD4<Float>(0.587, 0.587, 0.587, 0),
+                SIMD4<Float>(0.114, 0.114, 0.114, 0),
+                SIMD4<Float>(0, 0, 0, 1)
+            )
+            luminanceFilter.colorMatrix = MTIColorMatrix(matrix: luminanceMatrix, bias: SIMD4<Float>(0,0,0,0))
+            
+            if let luminanceImage = luminanceFilter.outputImage {
+                // Usa luminance como máscara suave para misturar
+                let mixFilter = MTIBlendFilter(blendMode: .normal)
+                mixFilter.inputImage = biasedImage
+                mixFilter.inputBackgroundImage = tintedImage
+                // Intensity baseada na luminance - menos efeito em áreas claras
+                mixFilter.intensity = 0.3 * abs(state.skinTone)
+                
+                tintedImageWithSkin = mixFilter.outputImage ?? tintedImage
+            } else {
+                tintedImageWithSkin = biasedImage
+            }
+        } else {
+            tintedImageWithSkin = tintedImage
+        }
         // Inversão de cores opcional (sem duotone)
-        let baseImageForInvert = tintedImage
+        let baseImageForInvert = tintedImageWithSkin
         var finalImage: MTIImage
         if state.colorInvert > 0.0 {
             let invertFilter = MTIColorInvertFilter()
@@ -792,7 +852,7 @@ class PhotoEditorViewModel: ObservableObject {
         
         // Filtro de color tint (quando uma cor for selecionada, independente da intensidade)
         let tintedImage: MTIImage
-        if state.colorTint.x > 0.0 || state.colorTint.y > 0.0 || state.colorTint.z > 0.0 {
+    if state.colorTint.x > 0.0 || state.colorTint.y > 0.0 || state.colorTint.z > 0.0 {
             if state.isDualToneActive && (state.colorTintSecondary.x > 0.0 || state.colorTintSecondary.y > 0.0 || state.colorTintSecondary.z > 0.0) {
                 // Dual tone real: mapeia luminância para duas cores
                 // 1. Converte para grayscale primeiro para obter luminância
@@ -875,8 +935,46 @@ class PhotoEditorViewModel: ObservableObject {
             tintedImage = sharpenedImage_preview
         }
         
+        // Skin tone adjustment (preview) – com máscara de saturação
+        let tintedImageWithSkin: MTIImage
+        if abs(state.skinTone) > 0.001 {
+            let amount = max(-1.0, min(1.0, state.skinTone))
+            let k = pow(abs(amount), 0.85)
+            
+            // Aplica bias primeiro
+            let biasedImage: MTIImage
+            if amount > 0 { // Âmbar
+                let biasR: Float = 0.050 * k
+                let biasG: Float = 0.020 * k
+                let biasB: Float = -0.035 * k
+                let matrixFilter = MTIColorMatrixFilter()
+                matrixFilter.inputImage = tintedImage
+                let mat = simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1))
+                matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: SIMD4<Float>(biasR, biasG, biasB, 0))
+                biasedImage = matrixFilter.outputImage ?? tintedImage
+            } else { // Avermelhado
+                let biasR: Float = 0.045 * k
+                let biasG: Float = -0.018 * k
+                let biasB: Float = 0.020 * k
+                let matrixFilter = MTIColorMatrixFilter()
+                matrixFilter.inputImage = tintedImage
+                let mat = simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1))
+                matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: SIMD4<Float>(biasR, biasG, biasB, 0))
+                biasedImage = matrixFilter.outputImage ?? tintedImage
+            }
+            
+            // Máscara de luminance (preview) - mais suave
+            let mixFilter = MTIBlendFilter(blendMode: .normal)
+            mixFilter.inputImage = biasedImage
+            mixFilter.inputBackgroundImage = tintedImage
+            mixFilter.intensity = 0.3 * abs(state.skinTone)
+            
+            tintedImageWithSkin = mixFilter.outputImage ?? tintedImage
+        } else {
+            tintedImageWithSkin = tintedImage
+        }
         // Filtro de inversão de cores (quando colorInvert > 0)
-        let baseImageForInvert = tintedImage
+        let baseImageForInvert = tintedImageWithSkin
         var finalImage: MTIImage
         if state.colorInvert > 0.0 {
             let invertFilter = MTIColorInvertFilter()

@@ -200,6 +200,7 @@ private extension PhotoEditorView {
                 isDualToneActive: $viewModel.editState.isDualToneActive,
                 colorTintIntensity: $viewModel.editState.colorTintIntensity,
                 colorTintFactor: $viewModel.editState.colorTintFactor,
+                skinTone: $viewModel.editState.skinTone,
                 onBeginAdjust: { viewModel.beginInteractiveAdjustments() },
                 onEndAdjust: { viewModel.endInteractiveAdjustments() }
             )

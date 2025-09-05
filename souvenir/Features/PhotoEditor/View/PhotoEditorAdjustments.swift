@@ -191,6 +191,7 @@ struct PhotoEditorAdjustments: View {
     @Binding var isDualToneActive: Bool
     @Binding var colorTintIntensity: Float
     @Binding var colorTintFactor: Float
+    @Binding var skinTone: Float
     var onBeginAdjust: (() -> Void)? = nil
     var onEndAdjust: (() -> Void)? = nil
     @State private var selectedAdjustment: String = "contrast"
@@ -231,6 +232,7 @@ struct PhotoEditorAdjustments: View {
         Adjustment(id: "colorInvert", label: "Inverter", icon: "circle.righthalf.filled"),
         Adjustment(id: "pixelateAmount", label: "Pixelizar", icon: "rectangle.split.3x3"),
         Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette")
+    ,Adjustment(id: "skinTone", label: "Tom Pele", icon: "person.crop.circle")
     ]
 
     private func isAdjustmentActive(_ id: String) -> Bool {
@@ -248,6 +250,7 @@ struct PhotoEditorAdjustments: View {
         case "clarity": return clarity > 0.0
         case "pixelateAmount": return pixelateAmount != 1.0
         case "colorTint": return !(colorTint.x == 0.0 && colorTint.y == 0.0 && colorTint.z == 0.0 && colorTint.w == 0.0)
+    case "skinTone": return skinTone != 0.0
         default: return false
         }
     }
@@ -336,6 +339,9 @@ struct PhotoEditorAdjustments: View {
                         tintPresets: tintPresets
                     )
                     .padding(.horizontal)
+                } else if selectedAdjustment == "skinTone" {
+                    SkinToneSlider(value: $skinTone, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                        .padding(.horizontal)
                 }
             }
         }
@@ -969,6 +975,28 @@ private struct ColorTintSlider: View {
             totalTicks: 31,
             majorTickEvery: 5,
             format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
+        )
+    }
+}
+
+private struct SkinToneSlider: View {
+    @Binding var value: Float // -1.0 (frio) ... 1.0 (quente)
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
+    var body: some View {
+        // Map 0...100 -> -1.0 ... 1.0
+        RulerSlider(
+            value: Binding(
+                get: { ((value + 1.0) * 50).rounded() },
+                set: { value = ($0 / 50) - 1.0 }
+            ),
+            range: 0...100,
+            step: 1.0,
+            totalTicks: 101,
+            majorTickEvery: 10,
+            format: { String(format: "%d", Int($0 - 50) * 2) },
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
         )
     }
 }
