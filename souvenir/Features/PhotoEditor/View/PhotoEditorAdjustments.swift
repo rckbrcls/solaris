@@ -180,6 +180,7 @@ struct PhotoEditorAdjustments: View {
     @Binding var saturation: Float
     @Binding var vibrance: Float
     @Binding var fade: Float
+    @Binding var vignette: Float
     @Binding var colorInvert: Float
     @Binding var pixelateAmount: Float
     @Binding var grain: Float
@@ -223,6 +224,7 @@ struct PhotoEditorAdjustments: View {
         Adjustment(id: "saturation", label: "Saturação", icon: "drop"),
         Adjustment(id: "vibrance", label: "Vibrance", icon: "waveform.path.ecg"),
         Adjustment(id: "fade", label: "Fade", icon: "aqi.medium"),
+        Adjustment(id: "vignette", label: "Vignette", icon: "camera.aperture"),
         Adjustment(id: "grain", label: "Grão (Film)", icon: "circle.grid.cross"),
         Adjustment(id: "sharpen", label: "Nitidez", icon: "wand.and.stars"),
         Adjustment(id: "clarity", label: "Clareza", icon: "circle.lefthalf.filled.inverse"),
@@ -239,6 +241,7 @@ struct PhotoEditorAdjustments: View {
         case "saturation": return saturation != 1.0
         case "vibrance": return vibrance != 0.0
         case "fade": return fade > 0.0
+        case "vignette": return vignette > 0.0
         case "grain": return grain > 0.0
         case "colorInvert": return colorInvert == 1.0
         case "sharpen": return sharpen > 0.0
@@ -302,6 +305,9 @@ struct PhotoEditorAdjustments: View {
                         .padding(.horizontal)
                 } else if selectedAdjustment == "fade" {
                     FadeSlider(value: $fade, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                        .padding(.horizontal)
+                } else if selectedAdjustment == "vignette" {
+                    VignetteSlider(value: $vignette, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorInvert" {
                     InvertToggle(colorInvert: $colorInvert, onBegin: onBeginAdjust, onEnd: onEndAdjust)
@@ -906,6 +912,28 @@ private struct GrainSlider: View {
 // GrainSizeSlider removed; grain size is fixed in pipeline
 
 private struct FadeSlider: View {
+    @Binding var value: Float // 0.0 ... 1.0
+    var onBegin: (() -> Void)? = nil
+    var onEnd: (() -> Void)? = nil
+    var body: some View {
+        // Map 0...100 -> 0.0...1.0
+        RulerSlider(
+            value: Binding(
+                get: { (value * 100).rounded() },
+                set: { value = $0 / 100 }
+            ),
+            range: 0...100,
+            step: 1.0,
+            totalTicks: 101,
+            majorTickEvery: 10,
+            format: { String(format: "%d", Int($0)) },
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
+        )
+    }
+}
+
+private struct VignetteSlider: View {
     @Binding var value: Float // 0.0 ... 1.0
     var onBegin: (() -> Void)? = nil
     var onEnd: (() -> Void)? = nil
