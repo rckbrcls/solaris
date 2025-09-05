@@ -472,6 +472,10 @@ struct PhotoEditorFilters: View {
         let con = MTIContrastFilter(); con.inputImage = mtiImage; con.contrast = state.contrast; if let o = con.outputImage { mtiImage = o }
         let opa = MTIOpacityFilter(); opa.inputImage = mtiImage; opa.opacity = state.opacity; if let o = opa.outputImage { mtiImage = o }
         if state.pixelateAmount > 1.0 { let pix = MTIPixellateFilter(); pix.inputImage = mtiImage; let sc = max(CGFloat(state.pixelateAmount), 1.0); pix.scale = CGSize(width: sc, height: sc); if let o = pix.outputImage { mtiImage = o } }
+        // Clarity (CLAHE) direct for thumbnails
+        if state.clarity > 0.0 {
+            let cla = MTICLAHEFilter(); cla.inputImage = mtiImage; cla.clipLimit = max(0.0, min(2.0, 0.5 + 1.0 * state.clarity)); cla.tileGridSize = MTICLAHESize(width: 12, height: 12); if let o = cla.outputImage { mtiImage = o }
+        }
         // Sharpen (Unsharp Mask) for thumbnails
         if state.sharpen > 0.0 {
             let usm = MTIMPSUnsharpMaskFilter(); usm.inputImage = mtiImage; usm.scale = min(max(state.sharpen, 0.0), 1.0); usm.radius = Float(1.0 + 3.0 * Double(state.sharpen)); usm.threshold = 0.0; if let o = usm.outputImage { mtiImage = o }

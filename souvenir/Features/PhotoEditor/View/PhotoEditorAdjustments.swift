@@ -183,6 +183,7 @@ struct PhotoEditorAdjustments: View {
     @Binding var pixelateAmount: Float
     @Binding var grain: Float
     @Binding var sharpen: Float
+    @Binding var clarity: Float
     @Binding var colorTint: SIMD4<Float>
     @Binding var colorTintSecondary: SIMD4<Float>
     @Binding var isDualToneActive: Bool
@@ -222,6 +223,7 @@ struct PhotoEditorAdjustments: View {
         Adjustment(id: "vibrance", label: "Vibrance", icon: "waveform.path.ecg"),
         Adjustment(id: "grain", label: "Grão (Film)", icon: "circle.grid.cross"),
         Adjustment(id: "sharpen", label: "Nitidez", icon: "wand.and.stars"),
+        Adjustment(id: "clarity", label: "Clareza", icon: "circle.lefthalf.filled.inverse"),
         Adjustment(id: "colorInvert", label: "Inverter", icon: "circle.righthalf.filled"),
         Adjustment(id: "pixelateAmount", label: "Pixelizar", icon: "rectangle.split.3x3"),
         Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette")
@@ -237,6 +239,7 @@ struct PhotoEditorAdjustments: View {
         case "grain": return grain > 0.0
         case "colorInvert": return colorInvert == 1.0
         case "sharpen": return sharpen > 0.0
+        case "clarity": return clarity > 0.0
         case "pixelateAmount": return pixelateAmount != 1.0
         case "colorTint": return !(colorTint.x == 0.0 && colorTint.y == 0.0 && colorTint.z == 0.0 && colorTint.w == 0.0)
         default: return false
@@ -305,6 +308,9 @@ struct PhotoEditorAdjustments: View {
                         .padding(.horizontal)
                 } else if selectedAdjustment == "sharpen" {
                     SharpenSlider(value: $sharpen, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                        .padding(.horizontal)
+                } else if selectedAdjustment == "clarity" {
+                    ClaritySlider(value: $clarity, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorTint" {
                     ColorTintControls(
@@ -832,6 +838,27 @@ private struct SharpenSlider: View {
     var onEnd: (() -> Void)? = nil
     var body: some View {
         // Map 0...100 -> 0.0...1.0
+        RulerSlider(
+            value: Binding(
+                get: { (value * 100).rounded() },
+                set: { value = $0 / 100 }
+            ),
+            range: 0...100,
+            step: 1.0,
+            totalTicks: 101,
+            majorTickEvery: 10,
+            format: { String(format: "%d", Int($0)) },
+            onEditingBegan: onBegin,
+            onEditingEnded: onEnd
+        )
+    }
+}
+
+private struct ClaritySlider: View {
+    @Binding var value: Float // 0.0 ... 1.0
+    var onBegin: (() -> Void)? = nil
+    var onEnd:   (() -> Void)? = nil
+    var body: some View {
         RulerSlider(
             value: Binding(
                 get: { (value * 100).rounded() },

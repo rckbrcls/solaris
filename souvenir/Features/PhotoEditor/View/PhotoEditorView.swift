@@ -193,6 +193,7 @@ private extension PhotoEditorView {
                 pixelateAmount: $viewModel.editState.pixelateAmount,
                 grain: $viewModel.editState.grain,
                 sharpen: $viewModel.editState.sharpen,
+                clarity: $viewModel.editState.clarity,
                 colorTint: $viewModel.editState.colorTint,
                 colorTintSecondary: $viewModel.editState.colorTintSecondary,
                 isDualToneActive: $viewModel.editState.isDualToneActive,

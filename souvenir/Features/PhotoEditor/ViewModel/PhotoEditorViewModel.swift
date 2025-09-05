@@ -24,6 +24,8 @@ struct PhotoEditState: Codable, Equatable {
     var pixelateAmount: Float = 1.0 // valor padrão neutro (sem pixelate)
     // Sharpen (0.0 neutral)
     var sharpen: Float = 0.0
+    // Clarity (local contrast; 0.0 neutral)
+    var clarity: Float = 0.0
     // Film grain (0.0 - 0.1 recomendado)
     var grain: Float = 0.0
     // Film grain size (0.0 fine → 1.0 coarse)
@@ -220,6 +222,7 @@ class PhotoEditorViewModel: ObservableObject {
         if changed(a.colorInvert, b.colorInvert) { keys.append("colorInvert") }
         if changed(a.pixelateAmount, b.pixelateAmount) { keys.append("pixelateAmount") }
         if changed(a.sharpen, b.sharpen) { keys.append("sharpen") }
+        if changed(a.clarity, b.clarity) { keys.append("clarity") }
         if changed(a.grain, b.grain) { keys.append("grain") }
         if changed(a.grainSize, b.grainSize) { keys.append("grainSize") }
         if colorChanged(a.colorTint, b.colorTint) { keys.append("colorTint") }
@@ -242,6 +245,7 @@ class PhotoEditorViewModel: ObservableObject {
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
             "sharpen": "Nitidez",
+            "clarity": "Clareza",
             "grain": "Grão",
             "grainSize": "Tamanho do Grão",
             "colorTint": "Tint",
@@ -270,6 +274,7 @@ class PhotoEditorViewModel: ObservableObject {
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
             "sharpen": "Nitidez",
+            "clarity": "Clareza",
             "grain": "Grão",
             "grainSize": "Tamanho do Grão",
             "colorTint": "Tint",
@@ -372,18 +377,30 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             pixelatedImage = opacityImage
         }
-        // Sharpen (Unsharp Mask) if requested
+        // Clarity (CLAHE) direct (MetalPetal) — no extra blends
+        let clarityImage_final: MTIImage
+        if state.clarity > 0.0 {
+            let clahe = MTICLAHEFilter()
+            clahe.inputImage = pixelatedImage
+            clahe.clipLimit = max(0.0, min(2.0, 0.5 + 1.0 * state.clarity))
+            clahe.tileGridSize = MTICLAHESize(width: 12, height: 12)
+            guard let out = clahe.outputImage else { return nil }
+            clarityImage_final = out
+        } else {
+            clarityImage_final = pixelatedImage
+        }
+        // Sharpen (Unsharp Mask) applied directly for a clean, gradual effect
         let sharpenedImage_final: MTIImage
         if state.sharpen > 0.0 {
             let usm = MTIMPSUnsharpMaskFilter()
-            usm.inputImage = pixelatedImage
+            usm.inputImage = clarityImage_final
             usm.scale = min(max(state.sharpen, 0.0), 1.0)
-            usm.radius = Float(1.0 + 3.0 * Double(state.sharpen))
+            usm.radius = Float(1.0 + 2.0 * Double(state.sharpen))
             usm.threshold = 0.0
             guard let out = usm.outputImage else { return nil }
             sharpenedImage_final = out
         } else {
-            sharpenedImage_final = pixelatedImage
+            sharpenedImage_final = clarityImage_final
         }
         let tintedImage: MTIImage
         if state.colorTint.x > 0.0 || state.colorTint.y > 0.0 || state.colorTint.z > 0.0 {
@@ -655,18 +672,30 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             pixelatedImage = opacityImage
         }
-        // Sharpen (Unsharp Mask) if requested
+        // Clarity (CLAHE) direct for preview — no blends
+        let clarityImage_preview: MTIImage
+        if state.clarity > 0.0 {
+            let clahe = MTICLAHEFilter()
+            clahe.inputImage = pixelatedImage
+            clahe.clipLimit = max(0.0, min(2.0, 0.5 + 1.0 * state.clarity))
+            clahe.tileGridSize = MTICLAHESize(width: 12, height: 12)
+            guard let out = clahe.outputImage else { return }
+            clarityImage_preview = out
+        } else {
+            clarityImage_preview = pixelatedImage
+        }
+        // Sharpen (Unsharp Mask) applied directly
         let sharpenedImage_preview: MTIImage
         if state.sharpen > 0.0 {
             let usm = MTIMPSUnsharpMaskFilter()
-            usm.inputImage = pixelatedImage
+            usm.inputImage = clarityImage_preview
             usm.scale = min(max(state.sharpen, 0.0), 1.0)
-            usm.radius = Float(1.0 + 3.0 * Double(state.sharpen))
+            usm.radius = Float(1.0 + 2.0 * Double(state.sharpen))
             usm.threshold = 0.0
             guard let out = usm.outputImage else { return }
             sharpenedImage_preview = out
         } else {
-            sharpenedImage_preview = pixelatedImage
+            sharpenedImage_preview = clarityImage_preview
         }
         
         // Filtro de color tint (quando uma cor for selecionada, independente da intensidade)
