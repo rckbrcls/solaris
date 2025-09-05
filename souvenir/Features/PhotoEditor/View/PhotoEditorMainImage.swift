@@ -30,6 +30,7 @@ struct PhotoEditorMainImage: View {
                             .frame(maxWidth: proxy.size.width)
                             .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
                             .animation(.none, value: filtered)
+                        Spacer(minLength: 0)
                     }
                 } else if let original = image {
                     VStack { Spacer(minLength: 0)
@@ -42,6 +43,7 @@ struct PhotoEditorMainImage: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: proxy.size.width)
                             .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
+                        Spacer(minLength: 0)
                     }
                 } else {
                     Text("Carregue ou selecione uma imagem para editar")
@@ -51,7 +53,7 @@ struct PhotoEditorMainImage: View {
                 }
                 
             }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
         }
         .frame(maxHeight: .infinity)
     }

@@ -167,7 +167,6 @@ private extension PhotoEditorView {
 
         content
             .background(colorSchemeManager.secondaryColor)
-            
             .padding(.bottom, max(6, geometry.safeAreaInsets.bottom))
             .frame(minHeight: adjustmentsHeight + max(6, geometry.safeAreaInsets.bottom))
             // Elimina qualquer hairline visual entre imagem e menu
