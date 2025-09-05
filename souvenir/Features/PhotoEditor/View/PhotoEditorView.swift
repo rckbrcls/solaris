@@ -62,6 +62,7 @@ struct PhotoEditorView: View {
     @State private var adjustmentsHeight: CGFloat = 0
     @State private var imageHeight: CGFloat = 0
     @State private var undoToastWorkItem: DispatchWorkItem? = nil
+    @State private var showSaveDiscardContent: Bool = false
 
     private var initialEditState: PhotoEditState
     private var initialHistory: [PhotoEditState]
@@ -226,17 +227,23 @@ private extension PhotoEditorView {
     var topControls: some View {
         VStack {
             HStack {
-                Button(action: {
-                    if hasChanges {
-                        showSaveDiscardModal = true
-                    } else {
-                        onFinishEditing?(nil, nil, viewModel.undoStack, false)
-                        dismiss()
+                    Button(action: {
+                        if hasChanges {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                showSaveDiscardModal = true
+                            }
+                            // Animate content in slightly after mounting
+                            DispatchQueue.main.async {
+                                withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = true }
+                            }
+                        } else {
+                            onFinishEditing?(nil, nil, viewModel.undoStack, false)
+                            dismiss()
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .editorIconStyle()
                     }
-                }) {
-                    Image(systemName: "xmark")
-                        .editorIconStyle()
-                }
                 Spacer()
                 Button(action: {
                     let gen = UIImpactFeedbackGenerator(style: .light)
@@ -295,9 +302,17 @@ private extension PhotoEditorView {
     // Custom modal for save/discard with our app style
     var saveDiscardOverlay: some View {
         ZStack {
+            // Backdrop
             Color.black.opacity(0.35)
                 .ignoresSafeArea()
-                .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { showSaveDiscardModal = false } }
+                .opacity(showSaveDiscardContent ? 1.0 : 0.0)
+                .onTapGesture {
+                    withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = false }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.23) {
+                        showSaveDiscardModal = false
+                    }
+                }
+            // Card
             VStack(spacing: 14) {
                 Text("Salvar alterações?")
                     .font(.headline)
@@ -306,7 +321,12 @@ private extension PhotoEditorView {
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                 VStack(spacing: 10) {
-                    Button(action: { performSaveAndExit() }) {
+                    Button(action: {
+                        withAnimation(.easeOut(duration: 0.12)) { showSaveDiscardContent = false }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            performSaveAndExit()
+                        }
+                    }) {
                         Text("Salvar")
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
@@ -315,8 +335,11 @@ private extension PhotoEditorView {
                             .foregroundColor(.white)
                     }
                     Button(action: {
-                        onFinishEditing?(nil, nil, viewModel.undoStack, false)
-                        dismiss()
+                        withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = false }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.23) {
+                            onFinishEditing?(nil, nil, viewModel.undoStack, false)
+                            dismiss()
+                        }
                     }) {
                         Text("Descartar")
                             .font(.body.bold())
@@ -325,7 +348,12 @@ private extension PhotoEditorView {
                             .background(Color.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .foregroundColor(.white)
                     }
-                    Button(action: { withAnimation(.easeOut(duration: 0.2)) { showSaveDiscardModal = false } }) {
+                    Button(action: {
+                        withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = false }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.23) {
+                            showSaveDiscardModal = false
+                        }
+                    }) {
                         Text("Cancelar")
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
@@ -342,7 +370,10 @@ private extension PhotoEditorView {
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.12), lineWidth: 1))
             .shadow(radius: 12)
             .padding(.horizontal, 24)
-            .transition(.scale(scale: 0.95).combined(with: .opacity))
+            .opacity(showSaveDiscardContent ? 1.0 : 0.0)
+            .scaleEffect(showSaveDiscardContent ? 1.0 : 0.96)
+            .animation(.easeOut(duration: 0.22), value: showSaveDiscardContent)
+            .onAppear { withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = true } }
         }
     }
 
