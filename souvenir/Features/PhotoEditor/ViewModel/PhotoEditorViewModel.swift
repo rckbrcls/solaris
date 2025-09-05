@@ -120,6 +120,11 @@ class PhotoEditorViewModel: ObservableObject {
         buildPreviewBases()
     }
 
+    // Exposed base image for thumbnails/previews (low-res preferred)
+    public var previewThumbnailBase: UIImage? {
+        return previewBaseLow ?? previewBase
+    }
+
     // MARK: - Undo management
     func seedUndoBaselineIfNeeded(baseline: PhotoEditState = PhotoEditState()) {
         // Seed a single undo step to baseline on fresh sessions

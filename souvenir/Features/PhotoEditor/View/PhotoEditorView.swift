@@ -166,7 +166,8 @@ private extension PhotoEditorView {
         if selectedCategory == "filters" {
             PhotoEditorFilters(
                 editState: $viewModel.editState,
-                registerUndo: { viewModel.registerUndoPoint() }
+                registerUndo: { viewModel.registerUndoPoint() },
+                baseImage: viewModel.previewThumbnailBase ?? viewModel.originalImage
             )
         } else if selectedCategory == "edit" {
             PhotoEditorAdjustments(
