@@ -32,6 +32,27 @@ struct SettingsView: View {
                         }
                     }
                 }
+                Section(header: Text("Edição e Exportação")) {
+                    Toggle("Preservar metadados (EXIF/GPS)", isOn: $appSettings.preserveMetadata)
+                    Picker("Perfil de cor", selection: $appSettings.exportColorSpace) {
+                        ForEach(AppSettings.ExportColorSpacePreference.allCases) { pref in
+                            Text(pref.label).tag(pref)
+                        }
+                    }
+                }
+                Section(header: Text("Histórico"), footer: Text("Limita o número de passos de desfazer persistidos por foto.")) {
+                    Stepper(value: $appSettings.historyLimit, in: 10...300, step: 10) {
+                        HStack {
+                            Text("Passos de undo")
+                            Spacer()
+                            Text("\(appSettings.historyLimit)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Section(header: Text("Feedback")) {
+                    Toggle("Haptics", isOn: $appSettings.hapticsEnabled)
+                }
             }
             .navigationTitle("Configurações")
             .toolbar {
@@ -42,4 +63,3 @@ struct SettingsView: View {
         }
     }
 }
-

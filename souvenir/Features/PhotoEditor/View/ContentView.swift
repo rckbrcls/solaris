@@ -77,6 +77,17 @@ struct ContentView: View {
                     CameraButtonView(ns: ns) {
                         showCamera = true
                     }
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            SettingsFloatingButtonView {
+                                showSettings = true
+                            }
+                            .padding(.trailing, 18)
+                            .padding(.bottom, 30)
+                        }
+                    }
                 }
 
                 LoadingOverlay(isVisible: $isBusy, title: busyTitle)
@@ -492,16 +503,22 @@ func writeUIImageWithSourceMetadata(_ image: UIImage, preferHEIC: Bool, destDir:
     let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] ?? [:]
     // Choose destination color space based on source profile
     let profileName = (props[kCGImagePropertyProfileName] as? String) ?? ""
-    let destCS = profileName.lowercased().contains("p3")
-        ? (CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB())
-        : (CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB())
+    let exportPref = AppSettings.shared.exportColorSpace
+    let destCS: CGColorSpace = {
+        switch exportPref {
+        case .auto:
+            return profileName.lowercased().contains("p3") ? (CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB()) : (CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB())
+        case .sRGB: return CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        case .displayP3: return CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB()
+        }
+    }()
     // Convert image to destination color space and drop alpha (JPEG/HEIC are opaque)
     guard let converted = convertUIImage(image, to: destCS, includeAlpha: false), let cg = converted.cgImage else { return nil }
-    var outProps = props
+    var outProps: [CFString: Any] = AppSettings.shared.preserveMetadata ? props : [:]
     // Force orientation to up (1) since we rasterized with correct orientation already
     outProps[kCGImagePropertyOrientation] = 1
     // Keep color model/profile name hints if available
-    if !profileName.isEmpty { outProps[kCGImagePropertyProfileName] = profileName }
+    if !profileName.isEmpty && AppSettings.shared.preserveMetadata { outProps[kCGImagePropertyProfileName] = profileName }
 
     guard let dest = CGImageDestinationCreateWithURL(destURL as CFURL, targetUTI, 1, nil) else { return nil }
     let options: [CFString: Any] = [

@@ -193,7 +193,7 @@ class PhotoEditorViewModel: ObservableObject {
         }
         while let last = cleaned.last, last == editState { cleaned.removeLast() }
         // Clamp to last N steps to avoid excessive manifest size
-        let limit = 100
+        let limit = AppSettings.shared.historyLimit
         undoStack = Array(cleaned.suffix(limit))
         redoStack.removeAll()
     }
