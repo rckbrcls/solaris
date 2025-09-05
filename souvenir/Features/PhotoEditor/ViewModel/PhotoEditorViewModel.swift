@@ -531,61 +531,52 @@ class PhotoEditorViewModel: ObservableObject {
             finalImage = baseImageForInvert
         }
 
-        // Vignette (MTI: overlay preto com queda suave e rampa suavizada)
+        // Vignette (corrigido para centralização correta em qualquer proporção, ex: 16:9)
         if state.vignette > 0.0 {
             let v = max(0.0, min(1.0, state.vignette))
             let size = finalImage.size
             let extent = CGRect(origin: .zero, size: size)
+            let w = size.width
+            let h = size.height
             if let radial = CIFilter(name: "CIRadialGradient") {
-                let cx = size.width * 0.5
-                let cy = size.height * 0.5
+                // Centro sempre geométrico independente de transformações anteriores
+                let cx = w * 0.5
+                let cy = h * 0.5
                 radial.setValue(CIVector(x: cx, y: cy), forKey: kCIInputCenterKey)
-                // Raios alvo até muito próximo da borda; rampa controlada por v
-                let rx = size.width  * 0.50
-                let ry = size.height * 0.50
-                let r1Base = min(rx, ry)
-                // Área clara menor: 0.65 (fraco) → 0.45 (forte)
-                let innerRatio = max(0.45, min(0.65, 0.65 - 0.20 * Double(v)))
-                let r0Base = max(1.0, r1Base * CGFloat(innerRatio))
-                radial.setValue(r0Base, forKey: "inputRadius0")
-                radial.setValue(r1Base, forKey: "inputRadius1")
-                // Alpha: base 0->1 -> smoothstep -> escala global (mais leve)
-                let edgeAlpha = CGFloat(0.50 * pow(Double(v), 0.85))
+                // Usa maior dimensão para garantir cobertura até as bordas mais longas
+                let outer = max(w, h) * 0.5
+                // Região clara diminui conforme intensidade (0.85 fraco -> 0.55 forte)
+                let innerRatio = 0.85 - 0.30 * Double(v)
+                let inner = max(1.0, outer * CGFloat(innerRatio))
+                radial.setValue(inner, forKey: "inputRadius0")
+                radial.setValue(outer, forKey: "inputRadius1")
                 radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor0")
-                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1.0), forKey: "inputColor1")
-                if var overlayCI = radial.outputImage {
-                    // Stretch circle to ellipse by non-uniform scaling around center
-                    let sx = rx / r1Base
-                    let sy = ry / r1Base
-                    let t = CGAffineTransform(translationX: -cx, y: -cy)
-                        .scaledBy(x: sx, y: sy)
-                        .translatedBy(x: cx, y: cy)
-                    overlayCI = overlayCI.transformed(by: t).cropped(to: extent)
-                    // Suaviza a rampa: alpha' = 3a^2 - 2a^3 (smoothstep)
+                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1), forKey: "inputColor1")
+                if var overlay = radial.outputImage?.cropped(to: extent) {
+                    // Suaviza borda com smoothstep (3a^2 - 2a^3)
                     if let poly = CIFilter(name: "CIColorPolynomial") {
-                        poly.setValue(overlayCI, forKey: kCIInputImageKey)
-                        // Mantém RGB (0) inalterados
+                        poly.setValue(overlay, forKey: kCIInputImageKey)
                         poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputRedCoefficients")
                         poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGreenCoefficients")
                         poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputBlueCoefficients")
-                        // Alpha: 0 + 0*a + 3*a^2 - 2*a^3
                         poly.setValue(CIVector(x: 0, y: 0, z: 3, w: -2), forKey: "inputAlphaCoefficients")
-                        overlayCI = poly.outputImage ?? overlayCI
+                        overlay = poly.outputImage ?? overlay
                     }
-                    // Ajusta intensidade global da alpha da vinheta
+                    // Escala alpha global (menos agressivo no começo)
+                    let edgeAlpha = CGFloat(0.6 * pow(Double(v), 0.88))
                     if let scaleA = CIFilter(name: "CIColorMatrix") {
-                        scaleA.setValue(overlayCI, forKey: kCIInputImageKey)
+                        scaleA.setValue(overlay, forKey: kCIInputImageKey)
                         scaleA.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
                         scaleA.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
                         scaleA.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
                         scaleA.setValue(CIVector(x: 0, y: 0, z: 0, w: edgeAlpha), forKey: "inputAVector")
-                        overlayCI = scaleA.outputImage ?? overlayCI
+                        overlay = scaleA.outputImage ?? overlay
                     }
-                    let overlay = MTIImage(ciImage: overlayCI, isOpaque: false)
+                    let overlayMTI = MTIImage(ciImage: overlay, isOpaque: false)
                     let over = MTIBlendFilter(blendMode: .normal)
-                    over.inputImage = overlay
+                    over.inputImage = overlayMTI
                     over.inputBackgroundImage = finalImage
-                    over.intensity = 1.0
+                    over.intensity = 1
                     over.outputAlphaType = .alphaIsOne
                     if let out = over.outputImage { finalImage = out }
                 }
@@ -906,60 +897,47 @@ class PhotoEditorViewModel: ObservableObject {
             finalImage = baseImageForInvert
         }
 
-        // Vignette (MTI: overlay preto com rampa suavizada)
+        // Vignette (corrigido: centralização para qualquer aspecto / preview)
         if state.vignette > 0.0 {
             let v = max(0.0, min(1.0, state.vignette))
             let size = finalImage.size
             let extent = CGRect(origin: .zero, size: size)
+            let w = size.width
+            let h = size.height
             if let radial = CIFilter(name: "CIRadialGradient") {
-                let cx = size.width * 0.5
-                let cy = size.height * 0.5
+                let cx = w * 0.5
+                let cy = h * 0.5
                 radial.setValue(CIVector(x: cx, y: cy), forKey: kCIInputCenterKey)
-                // Alvos próximos das bordas; rampa controlada por v
-                let rx = size.width  * 0.50
-                let ry = size.height * 0.50
-                // Constrói gradiente circular, depois estica para elipse
-                let r1Base = min(rx, ry)
-                // Área clara menor: 0.65 (fraco) → 0.45 (forte)
-                let innerRatio = max(0.45, min(0.65, 0.65 - 0.20 * Double(v)))
-                let r0Base = max(1.0, r1Base * CGFloat(innerRatio))
-                radial.setValue(r0Base, forKey: "inputRadius0")
-                radial.setValue(r1Base, forKey: "inputRadius1")
-                // Alpha: base 0->1; depois smoothstep + escala de intensidade (mais leve)
-                let edgeAlpha = CGFloat(0.50 * pow(Double(v), 0.85))
+                let outer = max(w, h) * 0.5
+                let innerRatio = 0.85 - 0.30 * Double(v)
+                let inner = max(1.0, outer * CGFloat(innerRatio))
+                radial.setValue(inner, forKey: "inputRadius0")
+                radial.setValue(outer, forKey: "inputRadius1")
                 radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor0")
-                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1.0), forKey: "inputColor1")
-                if var overlayCI = radial.outputImage {
-                    // Estica círculo para elipse mediante escala não uniforme ao redor do centro
-                    let sx = rx / r1Base
-                    let sy = ry / r1Base
-                    let t = CGAffineTransform(translationX: -cx, y: -cy)
-                        .scaledBy(x: sx, y: sy)
-                        .translatedBy(x: cx, y: cy)
-                    overlayCI = overlayCI.transformed(by: t).cropped(to: extent)
-                    // Suaviza a rampa com smoothstep: 3a^2 - 2a^3
+                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1), forKey: "inputColor1")
+                if var overlay = radial.outputImage?.cropped(to: extent) {
                     if let poly = CIFilter(name: "CIColorPolynomial") {
-                        poly.setValue(overlayCI, forKey: kCIInputImageKey)
+                        poly.setValue(overlay, forKey: kCIInputImageKey)
                         poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputRedCoefficients")
                         poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGreenCoefficients")
                         poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputBlueCoefficients")
                         poly.setValue(CIVector(x: 0, y: 0, z: 3, w: -2), forKey: "inputAlphaCoefficients")
-                        overlayCI = poly.outputImage ?? overlayCI
+                        overlay = poly.outputImage ?? overlay
                     }
-                    // Multiplica a alpha pela intensidade final
+                    let edgeAlpha = CGFloat(0.6 * pow(Double(v), 0.88))
                     if let scaleA = CIFilter(name: "CIColorMatrix") {
-                        scaleA.setValue(overlayCI, forKey: kCIInputImageKey)
+                        scaleA.setValue(overlay, forKey: kCIInputImageKey)
                         scaleA.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
                         scaleA.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
                         scaleA.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
                         scaleA.setValue(CIVector(x: 0, y: 0, z: 0, w: edgeAlpha), forKey: "inputAVector")
-                        overlayCI = scaleA.outputImage ?? overlayCI
+                        overlay = scaleA.outputImage ?? overlay
                     }
-                    let overlay = MTIImage(ciImage: overlayCI, isOpaque: false)
+                    let overlayMTI = MTIImage(ciImage: overlay, isOpaque: false)
                     let over = MTIBlendFilter(blendMode: .normal)
-                    over.inputImage = overlay
+                    over.inputImage = overlayMTI
                     over.inputBackgroundImage = finalImage
-                    over.intensity = 1.0
+                    over.intensity = 1
                     over.outputAlphaType = .alphaIsOne
                     if let out = over.outputImage { finalImage = out }
                 }

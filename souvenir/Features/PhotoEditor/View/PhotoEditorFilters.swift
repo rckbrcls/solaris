@@ -405,30 +405,23 @@ struct PhotoEditorFilters: View {
             f.setValue(NSNumber(value: Double(min(max(state.sharpen, 0.0), 1.0) * 1.2)), forKey: kCIInputIntensityKey)
             if let o = f.outputImage { output = o }
         }
-        // Vignette (CI fallback: overlay preto elíptico — suavizado com smoothstep)
+        // Vignette (corrigido: proporcional para qualquer aspect ratio)
         if state.vignette > 0.0, let radial = CIFilter(name: "CIRadialGradient") {
             let v = CGFloat(min(max(state.vignette, 0.0), 1.0))
             let size = output.extent.size
-            let cx = size.width * 0.5
-            let cy = size.height * 0.5
+            let w = size.width
+            let h = size.height
+            let cx = w * 0.5
+            let cy = h * 0.5
             radial.setValue(CIVector(x: cx, y: cy), forKey: kCIInputCenterKey)
-            let rx = size.width  * 0.49
-            let ry = size.height * 0.49
-            let r1Base = min(rx, ry)
-            let innerRatio = max(0.70, min(0.85, 0.80 - 0.10 * Double(v)))
-            let r0Base = max(1.0, r1Base * CGFloat(innerRatio))
-            radial.setValue(r0Base, forKey: "inputRadius0")
-            radial.setValue(r1Base, forKey: "inputRadius1")
+            let outer = max(w, h) * 0.5
+            let innerRatio = 0.85 - 0.30 * Double(v) // shrink inner as intensity grows
+            let inner = max(1.0, outer * CGFloat(innerRatio))
+            radial.setValue(inner, forKey: "inputRadius0")
+            radial.setValue(outer, forKey: "inputRadius1")
             radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor0")
             radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1.0), forKey: "inputColor1")
-            if var overlay = radial.outputImage {
-                let sx = rx / r1Base
-                let sy = ry / r1Base
-                let t = CGAffineTransform(translationX: -cx, y: -cy)
-                    .scaledBy(x: sx, y: sy)
-                    .translatedBy(x: cx, y: cy)
-                overlay = overlay.transformed(by: t).cropped(to: output.extent)
-                // Rampa smoothstep na alpha
+            if var overlay = radial.outputImage?.cropped(to: output.extent) {
                 if let poly = CIFilter(name: "CIColorPolynomial") {
                     poly.setValue(overlay, forKey: kCIInputImageKey)
                     poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputRedCoefficients")
@@ -437,13 +430,13 @@ struct PhotoEditorFilters: View {
                     poly.setValue(CIVector(x: 0, y: 0, z: 3, w: -2), forKey: "inputAlphaCoefficients")
                     overlay = poly.outputImage ?? overlay
                 }
-                // Escala intensidade final
                 if let scaleA = CIFilter(name: "CIColorMatrix") {
+                    let edgeAlpha = CGFloat(0.6 * pow(Double(v), 0.88))
                     scaleA.setValue(overlay, forKey: kCIInputImageKey)
                     scaleA.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
                     scaleA.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
                     scaleA.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
-                    scaleA.setValue(CIVector(x: 0, y: 0, z: 0, w: CGFloat(0.65 * pow(Double(v), 0.9))), forKey: "inputAVector")
+                    scaleA.setValue(CIVector(x: 0, y: 0, z: 0, w: edgeAlpha), forKey: "inputAVector")
                     overlay = scaleA.outputImage ?? overlay
                 }
                 if let over = CIFilter(name: "CISourceOverCompositing") {
@@ -572,32 +565,26 @@ struct PhotoEditorFilters: View {
                 if let o = mat.outputImage { mtiImage = o }
             }
         }
-        // Vignette via CI radial -> MTI blend (suave, rampa smoothstep)
+        // Vignette (corrigido para qualquer aspecto)
         if state.vignette > 0.0 {
             let v = max(0.0, min(1.0, state.vignette))
             let size = mtiImage.size
+            let w = size.width
+            let h = size.height
             let extent = CGRect(origin: .zero, size: size)
             if let radial = CIFilter(name: "CIRadialGradient") {
-                let cx = size.width * 0.5
-                let cy = size.height * 0.5
+                let cx = w * 0.5
+                let cy = h * 0.5
                 radial.setValue(CIVector(x: cx, y: cy), forKey: kCIInputCenterKey)
-                let rx = size.width  * 0.50
-                let ry = size.height * 0.50
-                let r1Base = min(rx, ry)
-                let innerRatio = max(0.45, min(0.65, 0.65 - 0.20 * Double(v)))
-                let r0Base = max(1.0, r1Base * CGFloat(innerRatio))
-                radial.setValue(r0Base, forKey: "inputRadius0")
-                radial.setValue(r1Base, forKey: "inputRadius1")
+                let outer = max(w, h) * 0.5
+                let innerRatio = 0.85 - 0.30 * Double(v)
+                let inner = max(1.0, outer * CGFloat(innerRatio))
+                radial.setValue(inner, forKey: "inputRadius0")
+                radial.setValue(outer, forKey: "inputRadius1")
                 radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor0")
-                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1.0), forKey: "inputColor1")
-                if var overlayCI = radial.outputImage {
-                    let sx = rx / r1Base
-                    let sy = ry / r1Base
-                    let t = CGAffineTransform(translationX: -cx, y: -cy)
-                        .scaledBy(x: sx, y: sy)
-                        .translatedBy(x: cx, y: cy)
-                    overlayCI = overlayCI.transformed(by: t).cropped(to: extent)
-                    // Smoothstep na alpha e escala por intensidade
+                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1), forKey: "inputColor1")
+                if var overlayCI = radial.outputImage?.cropped(to: extent) {
+                    // Smoothstep na alpha
                     if let poly = CIFilter(name: "CIColorPolynomial") {
                         poly.setValue(overlayCI, forKey: kCIInputImageKey)
                         poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputRedCoefficients")
@@ -606,7 +593,7 @@ struct PhotoEditorFilters: View {
                         poly.setValue(CIVector(x: 0, y: 0, z: 3, w: -2), forKey: "inputAlphaCoefficients")
                         overlayCI = poly.outputImage ?? overlayCI
                     }
-                    let edgeAlpha = CGFloat(0.50 * pow(Double(v), 0.85))
+                    let edgeAlpha = CGFloat(0.6 * pow(Double(v), 0.88))
                     if let scaleA = CIFilter(name: "CIColorMatrix") {
                         scaleA.setValue(overlayCI, forKey: kCIInputImageKey)
                         scaleA.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
