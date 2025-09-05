@@ -24,8 +24,11 @@ struct PhotoEditorFilters: View {
     var registerUndo: (() -> Void)? = nil
 
     @State private var selectedGroup: FilterGroup = .souvenir
+    @State private var stage: Stage = .groups
     @State private var selectedPresetID: String? = nil
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
+
+    enum Stage { case groups, presets }
 
     private var souvenirPresets: [FilterPreset] {
         [
@@ -116,11 +119,12 @@ struct PhotoEditorFilters: View {
                 swatch: [.blue, .indigo],
                 state: {
                     var s = PhotoEditState()
-                    s.saturation = 1.05
-                    s.vibrance = 0.2
-                    s.colorTint = SIMD4<Float>(0.55, 0.75, 1.0, 1.0)
-                    s.colorTintIntensity = 0.9
-                    s.colorTintFactor = 0.28
+                    s.saturation = 1.15
+                    s.vibrance = 0.35
+                    s.contrast = 1.08
+                    s.colorTint = SIMD4<Float>(0.50, 0.72, 1.0, 1.0)
+                    s.colorTintIntensity = 0.95
+                    s.colorTintFactor = 0.40
                     return s
                 }()
             ),
@@ -131,12 +135,13 @@ struct PhotoEditorFilters: View {
                 swatch: [.red, .orange],
                 state: {
                     var s = PhotoEditState()
-                    s.contrast = 1.15
-                    s.saturation = 1.2
-                    s.vibrance = 0.25
-                    s.colorTint = SIMD4<Float>(1.0, 0.6, 0.6, 1.0)
-                    s.colorTintIntensity = 0.9
-                    s.colorTintFactor = 0.22
+                    s.contrast = 1.20
+                    s.saturation = 1.30
+                    s.vibrance = 0.35
+                    s.exposure = 0.05
+                    s.colorTint = SIMD4<Float>(1.0, 0.55, 0.55, 1.0)
+                    s.colorTintIntensity = 0.95
+                    s.colorTintFactor = 0.38
                     return s
                 }()
             ),
@@ -147,12 +152,12 @@ struct PhotoEditorFilters: View {
                 swatch: [.pink, .red.opacity(0.7)],
                 state: {
                     var s = PhotoEditState()
-                    s.contrast = 1.05
-                    s.saturation = 1.1
-                    s.vibrance = 0.18
-                    s.colorTint = SIMD4<Float>(1.0, 0.8, 0.85, 1.0)
-                    s.colorTintIntensity = 0.9
-                    s.colorTintFactor = 0.20
+                    s.contrast = 1.12
+                    s.saturation = 1.25
+                    s.vibrance = 0.30
+                    s.colorTint = SIMD4<Float>(1.0, 0.78, 0.86, 1.0)
+                    s.colorTintIntensity = 0.95
+                    s.colorTintFactor = 0.32
                     return s
                 }()
             )
@@ -160,57 +165,16 @@ struct PhotoEditorFilters: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Group toggle
-            HStack(spacing: 8) {
-                ForEach(FilterGroup.allCases, id: \.self) { g in
-                    Button(action: { withAnimation(.easeOut(duration: 0.2)) { selectedGroup = g } }) {
-                        Text(g.rawValue)
-                            .font(.callout.bold())
-                            .foregroundColor(selectedGroup == g ? .white : colorSchemeManager.primaryColor)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background((selectedGroup == g ? Color.accentColor : colorSchemeManager.primaryColor.opacity(0.08)), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                }
-            }
-            .boxBlankStyle(cornerRadius: 12, padding: 6)
-
-            // Presets list
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(presetsForSelected(), id: \.id) { preset in
-                        Button(action: { applyPreset(preset) }) {
-                            VStack(spacing: 8) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(LinearGradient(colors: preset.swatch, startPoint: .topLeading, endPoint: .bottomTrailing))
-                                        .frame(width: 84, height: 84)
-                                    if selectedPresetID == preset.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.title2)
-                                            .foregroundColor(.white)
-                                            .shadow(radius: 3)
-                                    }
-                                }
-                                Text(preset.name)
-                                    .font(.caption.bold())
-                                    .foregroundColor(.primary)
-                                if let sub = preset.subtitle {
-                                    Text(sub)
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .frame(width: 96)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 6)
+        ZStack {
+            if stage == .groups {
+                groupList
+                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+            } else {
+                presetsList
+                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
             }
         }
-        .padding(.horizontal)
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: stage)
     }
 
     private func presetsForSelected() -> [FilterPreset] {
@@ -225,6 +189,89 @@ struct PhotoEditorFilters: View {
         withAnimation(.easeOut(duration: 0.18)) {
             editState = preset.state
             selectedPresetID = preset.id
+        }
+    }
+
+    // MARK: - Views
+    private var groupList: some View {
+        VStack(spacing: 12) {
+            Text("Categorias de filtros")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+            VStack(spacing: 10) {
+                ForEach(FilterGroup.allCases, id: \.self) { g in
+                    Button(action: {
+                        withAnimation { selectedGroup = g; stage = .presets }
+                    }) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(g.rawValue)
+                                    .font(.body.bold())
+                                    .foregroundColor(.primary)
+                                Text(g == .souvenir ? "Clássicos do app" : "Universo DÖST — cores intensas")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(14)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+
+    private var presetsList: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Button(action: { withAnimation { stage = .groups } }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                        Text("Categorias")
+                    }
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Text(selectedGroup.rawValue)
+                    .font(.headline)
+                Spacer().frame(width: 24)
+            }
+            .padding(.horizontal)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(presetsForSelected(), id: \.id) { preset in
+                        Button(action: { applyPreset(preset) }) {
+                            VStack(spacing: 6) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(LinearGradient(colors: preset.swatch, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        .frame(width: 70, height: 70)
+                                    if selectedPresetID == preset.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.title3)
+                                            .foregroundColor(.white)
+                                            .shadow(radius: 3)
+                                    }
+                                }
+                                Text(preset.name)
+                                    .font(.caption.bold())
+                                    .foregroundColor(.primary)
+                            }
+                            .frame(width: 78)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 10)
+            }
         }
     }
 }
