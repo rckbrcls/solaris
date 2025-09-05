@@ -314,7 +314,6 @@ private extension PhotoEditorView {
                 )
             }
             .padding(.horizontal, 12)
-            .padding(.top, 4) // move closer to top
             Spacer()
         }
     }
