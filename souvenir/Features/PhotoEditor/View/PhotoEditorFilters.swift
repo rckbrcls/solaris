@@ -109,9 +109,9 @@ struct PhotoEditorFilters: View {
                 swatch: [.gray, .white],
                 state: {
                     var s = PhotoEditState()
-                    s.contrast = 0.9
-                    s.brightness = 0.05
-                    s.vibrance = 0.05
+                    s.fade = 0.22
+                    s.contrast = 0.95
+                    s.vibrance = 0.04
                     return s
                 }()
             )
@@ -362,6 +362,17 @@ struct PhotoEditorFilters: View {
             f.setValue(state.exposure as NSNumber, forKey: kCIInputEVKey)
             if let o = f.outputImage { output = o }
         }
+        // Fade (elevação dos pretos): out = in*(1-f) + f
+        if state.fade > 0.0, let f = CIFilter(name: "CIColorMatrix") {
+            let k = CGFloat(0.35) * CGFloat(max(0.0, min(1.0, state.fade)))
+            f.setValue(output, forKey: kCIInputImageKey)
+            f.setValue(CIVector(x: 1 - k, y: 0, z: 0, w: 0), forKey: "inputRVector")
+            f.setValue(CIVector(x: 0, y: 1 - k, z: 0, w: 0), forKey: "inputGVector")
+            f.setValue(CIVector(x: 0, y: 0, z: 1 - k, w: 0), forKey: "inputBVector")
+            f.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
+            f.setValue(CIVector(x: k, y: k, z: k, w: 0), forKey: "inputBiasVector")
+            if let o = f.outputImage { output = o }
+        }
         // Color tint (approx via bias)
         if state.colorTint.x > 0 || state.colorTint.y > 0 || state.colorTint.z > 0 {
             if let f = CIFilter(name: "CIColorMatrix") {
@@ -462,6 +473,13 @@ struct PhotoEditorFilters: View {
         let exp = MTIExposureFilter(); exp.inputImage = mtiImage; exp.exposure = state.exposure; if let o = exp.outputImage { mtiImage = o }
         let bri = MTIBrightnessFilter(); bri.inputImage = mtiImage; bri.brightness = state.brightness; if let o = bri.outputImage { mtiImage = o }
         let con = MTIContrastFilter(); con.inputImage = mtiImage; con.contrast = state.contrast; if let o = con.outputImage { mtiImage = o }
+        // Fade (elevação dos pretos): out = in*(1-f) + f
+        if state.fade > 0.0 {
+            let k = 0.35 * max(0.0, min(1.0, state.fade))
+            let cm = MTIColorMatrixFilter(); cm.inputImage = mtiImage
+            cm.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(1 - k, 1 - k, 1 - k, 1)), bias: SIMD4<Float>(k, k, k, 0))
+            if let o = cm.outputImage { mtiImage = o }
+        }
         let opa = MTIOpacityFilter(); opa.inputImage = mtiImage; opa.opacity = state.opacity; if let o = opa.outputImage { mtiImage = o }
         if state.pixelateAmount > 1.0 { let pix = MTIPixellateFilter(); pix.inputImage = mtiImage; let sc = max(CGFloat(state.pixelateAmount), 1.0); pix.scale = CGSize(width: sc, height: sc); if let o = pix.outputImage { mtiImage = o } }
         // Clarity (CLAHE) direct for thumbnails

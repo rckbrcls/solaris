@@ -20,6 +20,8 @@ struct PhotoEditState: Codable, Equatable {
     var saturation: Float = 1.0 // valor padrão neutro
     var vibrance: Float = 0.0 // valor padrão neutro (sem vibrance)
     var opacity: Float = 1.0 // valor padrão neutro (totalmente opaco)
+    // Fade (elevação dos pretos / redução de contraste linear; 0.0 neutro)
+    var fade: Float = 0.0
     var colorInvert: Float = 0.0 // valor padrão neutro (sem inversão)
     var pixelateAmount: Float = 1.0 // valor padrão neutro (sem pixelate)
     // Sharpen (0.0 neutral)
@@ -219,6 +221,7 @@ class PhotoEditorViewModel: ObservableObject {
         if changed(a.saturation, b.saturation) { keys.append("saturation") }
         if changed(a.vibrance, b.vibrance) { keys.append("vibrance") }
         if changed(a.opacity, b.opacity) { keys.append("opacity") }
+        if changed(a.fade, b.fade) { keys.append("fade") }
         if changed(a.colorInvert, b.colorInvert) { keys.append("colorInvert") }
         if changed(a.pixelateAmount, b.pixelateAmount) { keys.append("pixelateAmount") }
         if changed(a.sharpen, b.sharpen) { keys.append("sharpen") }
@@ -242,6 +245,7 @@ class PhotoEditorViewModel: ObservableObject {
             "saturation": "Saturação",
             "vibrance": "Vibrance",
             "opacity": "Opacidade",
+            "fade": "Fade",
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
             "sharpen": "Nitidez",
@@ -271,6 +275,7 @@ class PhotoEditorViewModel: ObservableObject {
             "saturation": "Saturação",
             "vibrance": "Vibrance",
             "opacity": "Opacidade",
+            "fade": "Fade",
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
             "sharpen": "Nitidez",
@@ -362,8 +367,23 @@ class PhotoEditorViewModel: ObservableObject {
         contrastFilter.inputImage = brightImage
         contrastFilter.contrast = state.contrast
         guard let contrastImage = contrastFilter.outputImage else { return nil }
+        // Fade (elevação dos pretos via ColorMatrix: out = in*(1-f) + f)
+        let imageAfterFade: MTIImage
+        if state.fade > 0.0 {
+            let k = 0.35 * max(0.0, min(1.0, state.fade))
+            let cm = MTIColorMatrixFilter()
+            cm.inputImage = contrastImage
+            cm.colorMatrix = MTIColorMatrix(
+                matrix: simd_float4x4(diagonal: SIMD4<Float>(1 - k, 1 - k, 1 - k, 1)),
+                bias: SIMD4<Float>(k, k, k, 0)
+            )
+            guard let out = cm.outputImage else { return nil }
+            imageAfterFade = out
+        } else {
+            imageAfterFade = contrastImage
+        }
         let opacityFilter = MTIOpacityFilter()
-        opacityFilter.inputImage = contrastImage
+        opacityFilter.inputImage = imageAfterFade
         opacityFilter.opacity = state.opacity
         guard let opacityImage = opacityFilter.outputImage else { return nil }
         let pixelatedImage: MTIImage
@@ -653,9 +673,24 @@ class PhotoEditorViewModel: ObservableObject {
         contrastFilter.inputImage = brightImage
         contrastFilter.contrast = state.contrast
         guard let contrastImage = contrastFilter.outputImage else { return }
+        // Fade (elevação dos pretos via ColorMatrix: out = in*(1-f) + f)
+        let imageAfterFade: MTIImage
+        if state.fade > 0.0 {
+            let k = 0.35 * max(0.0, min(1.0, state.fade))
+            let cm = MTIColorMatrixFilter()
+            cm.inputImage = contrastImage
+            cm.colorMatrix = MTIColorMatrix(
+                matrix: simd_float4x4(diagonal: SIMD4<Float>(1 - k, 1 - k, 1 - k, 1)),
+                bias: SIMD4<Float>(k, k, k, 0)
+            )
+            guard let out = cm.outputImage else { return }
+            imageAfterFade = out
+        } else {
+            imageAfterFade = contrastImage
+        }
         // Filtro de opacidade (usando MTIOpacityFilter especializado)
         let opacityFilter = MTIOpacityFilter()
-        opacityFilter.inputImage = contrastImage
+        opacityFilter.inputImage = imageAfterFade
         opacityFilter.opacity = state.opacity
         guard let opacityImage = opacityFilter.outputImage else { return }
         

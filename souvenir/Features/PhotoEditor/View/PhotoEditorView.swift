@@ -188,6 +188,7 @@ private extension PhotoEditorView {
                 exposure: $viewModel.editState.exposure,
                 saturation: $viewModel.editState.saturation,
                 vibrance: $viewModel.editState.vibrance,
+                fade: $viewModel.editState.fade,
                 colorInvert: $viewModel.editState.colorInvert,
                 pixelateAmount: $viewModel.editState.pixelateAmount,
                 grain: $viewModel.editState.grain,
