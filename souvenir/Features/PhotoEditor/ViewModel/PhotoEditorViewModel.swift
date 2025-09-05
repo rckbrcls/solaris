@@ -561,7 +561,7 @@ class PhotoEditorViewModel: ObservableObject {
                 mixFilter.inputImage = biasedImage
                 mixFilter.inputBackgroundImage = tintedImage
                 // Intensity baseada na luminance - menos efeito em áreas claras
-                mixFilter.intensity = 0.3 * abs(state.skinTone)
+                mixFilter.intensity = 0.55 * abs(state.skinTone)
                 
                 tintedImageWithSkin = mixFilter.outputImage ?? tintedImage
             } else {
@@ -967,7 +967,7 @@ class PhotoEditorViewModel: ObservableObject {
             let mixFilter = MTIBlendFilter(blendMode: .normal)
             mixFilter.inputImage = biasedImage
             mixFilter.inputBackgroundImage = tintedImage
-            mixFilter.intensity = 0.3 * abs(state.skinTone)
+            mixFilter.intensity = 0.55 * abs(state.skinTone)
             
             tintedImageWithSkin = mixFilter.outputImage ?? tintedImage
         } else {
