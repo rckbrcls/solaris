@@ -66,3 +66,5 @@ private extension CGRect {
         CGPoint(x: midX, y: midY)
     }
 }
+
+// Removed dynamic container clipping to avoid jank in zoom

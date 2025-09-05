@@ -5,6 +5,8 @@ import SwiftUI
 struct ZoomableModifier: ViewModifier {
     let minZoomScale: CGFloat
     let doubleTapZoomScale: CGFloat
+    var onScaleChange: ((CGFloat, CGAffineTransform) -> Void)? = nil
+    var onGestureEnd: ((CGFloat, CGAffineTransform) -> Void)? = nil
 
     @State private var lastTransform: CGAffineTransform = .identity
     @State private var transform: CGAffineTransform = .identity
@@ -40,6 +42,7 @@ struct ZoomableModifier: ViewModifier {
                 let zoomFactor = 0.5
                 let scale = value * zoomFactor
                 transform = lastTransform.scaledBy(x: scale, y: scale)
+                onScaleChange?(transform.scaleX, transform)
             }
             .onEnded { _ in
                 onEndGesture()
@@ -55,10 +58,9 @@ struct ZoomableModifier: ViewModifier {
                     anchor: value.startAnchor.scaledBy(contentSize)
                 )
 
-                // Animação mais suave para preservar qualidade
-                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
-                    transform = lastTransform.concatenating(newTransform)
-                }
+                // Atualiza sem animação durante o gesto para evitar travadas
+                transform = lastTransform.concatenating(newTransform)
+                onScaleChange?(transform.scaleX, transform)
             }
             .onEnded { _ in
                 onEndGesture()
@@ -79,18 +81,19 @@ struct ZoomableModifier: ViewModifier {
                     transform = newTransform
                     lastTransform = newTransform
                 }
+                onScaleChange?(transform.scaleX, transform)
             }
     }
 
     private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
-                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
-                    transform = lastTransform.translatedBy(
-                        x: value.translation.width / transform.scaleX,
-                        y: value.translation.height / transform.scaleY
-                    )
-                }
+                // Atualiza sem animação durante o gesto para evitar travadas
+                transform = lastTransform.translatedBy(
+                    x: value.translation.width / transform.scaleX,
+                    y: value.translation.height / transform.scaleY
+                )
+                onScaleChange?(transform.scaleX, transform)
             }
             .onEnded { _ in
                 onEndGesture()
@@ -104,6 +107,8 @@ struct ZoomableModifier: ViewModifier {
             transform = newTransform
             lastTransform = newTransform
         }
+        onScaleChange?(transform.scaleX, transform)
+        onGestureEnd?(transform.scaleX, transform)
     }
 
     private func limitTransform(_ transform: CGAffineTransform) -> CGAffineTransform {
@@ -138,11 +143,15 @@ public extension View {
     @ViewBuilder
     func zoomable(
         minZoomScale: CGFloat = 1,
-        doubleTapZoomScale: CGFloat = 3
+        doubleTapZoomScale: CGFloat = 3,
+        onScaleChange: ((CGFloat, CGAffineTransform) -> Void)? = nil,
+        onGestureEnd: ((CGFloat, CGAffineTransform) -> Void)? = nil
     ) -> some View {
         modifier(ZoomableModifier(
             minZoomScale: minZoomScale,
-            doubleTapZoomScale: doubleTapZoomScale
+            doubleTapZoomScale: doubleTapZoomScale,
+            onScaleChange: onScaleChange,
+            onGestureEnd: onGestureEnd
         ))
     }
 
@@ -150,14 +159,18 @@ public extension View {
     func zoomable(
         minZoomScale: CGFloat = 1,
         doubleTapZoomScale: CGFloat = 3,
-        outOfBoundsColor: Color = .clear
+        outOfBoundsColor: Color = .clear,
+        onScaleChange: ((CGFloat, CGAffineTransform) -> Void)? = nil,
+        onGestureEnd: ((CGFloat, CGAffineTransform) -> Void)? = nil
     ) -> some View {
         GeometryReader { proxy in
             ZStack {
                 outOfBoundsColor
                 self.zoomable(
                     minZoomScale: minZoomScale,
-                    doubleTapZoomScale: doubleTapZoomScale
+                    doubleTapZoomScale: doubleTapZoomScale,
+                    onScaleChange: onScaleChange,
+                    onGestureEnd: onGestureEnd
                 )
             }
         }
