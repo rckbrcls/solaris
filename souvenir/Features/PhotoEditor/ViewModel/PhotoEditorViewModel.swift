@@ -22,6 +22,8 @@ struct PhotoEditState: Codable, Equatable {
     var opacity: Float = 1.0 // valor padrão neutro (totalmente opaco)
     var colorInvert: Float = 0.0 // valor padrão neutro (sem inversão)
     var pixelateAmount: Float = 1.0 // valor padrão neutro (sem pixelate)
+    // Sharpen (0.0 neutral)
+    var sharpen: Float = 0.0
     // Film grain (0.0 - 0.1 recomendado)
     var grain: Float = 0.0
     // Film grain size (0.0 fine → 1.0 coarse)
@@ -217,6 +219,7 @@ class PhotoEditorViewModel: ObservableObject {
         if changed(a.opacity, b.opacity) { keys.append("opacity") }
         if changed(a.colorInvert, b.colorInvert) { keys.append("colorInvert") }
         if changed(a.pixelateAmount, b.pixelateAmount) { keys.append("pixelateAmount") }
+        if changed(a.sharpen, b.sharpen) { keys.append("sharpen") }
         if changed(a.grain, b.grain) { keys.append("grain") }
         if changed(a.grainSize, b.grainSize) { keys.append("grainSize") }
         if colorChanged(a.colorTint, b.colorTint) { keys.append("colorTint") }
@@ -238,6 +241,7 @@ class PhotoEditorViewModel: ObservableObject {
             "opacity": "Opacidade",
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
+            "sharpen": "Nitidez",
             "grain": "Grão",
             "grainSize": "Tamanho do Grão",
             "colorTint": "Tint",
@@ -265,6 +269,7 @@ class PhotoEditorViewModel: ObservableObject {
             "opacity": "Opacidade",
             "colorInvert": "Inverter",
             "pixelateAmount": "Pixelizar",
+            "sharpen": "Nitidez",
             "grain": "Grão",
             "grainSize": "Tamanho do Grão",
             "colorTint": "Tint",
@@ -367,13 +372,26 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             pixelatedImage = opacityImage
         }
+        // Sharpen (Unsharp Mask) if requested
+        let sharpenedImage_final: MTIImage
+        if state.sharpen > 0.0 {
+            let usm = MTIMPSUnsharpMaskFilter()
+            usm.inputImage = pixelatedImage
+            usm.scale = min(max(state.sharpen, 0.0), 1.0)
+            usm.radius = Float(1.0 + 3.0 * Double(state.sharpen))
+            usm.threshold = 0.0
+            guard let out = usm.outputImage else { return nil }
+            sharpenedImage_final = out
+        } else {
+            sharpenedImage_final = pixelatedImage
+        }
         let tintedImage: MTIImage
         if state.colorTint.x > 0.0 || state.colorTint.y > 0.0 || state.colorTint.z > 0.0 {
             if state.isDualToneActive && (state.colorTintSecondary.x > 0.0 || state.colorTintSecondary.y > 0.0 || state.colorTintSecondary.z > 0.0) {
                 // Dual tone real: mapeia luminância para duas cores
                 // 1. Converte para grayscale primeiro para obter luminância
                 let grayscaleFilter = MTIColorMatrixFilter()
-                grayscaleFilter.inputImage = pixelatedImage
+                grayscaleFilter.inputImage = sharpenedImage_final
                 
                 // Matriz para converter para grayscale (preserva luminância)
                 let grayscaleMatrix = simd_float4x4(
@@ -426,7 +444,7 @@ class PhotoEditorViewModel: ObservableObject {
                 // Blend final com imagem original para preservar detalhes
                 let finalBlend = MTIBlendFilter(blendMode: .normal)
                 finalBlend.inputImage = dualToneResult
-                finalBlend.inputBackgroundImage = pixelatedImage
+                finalBlend.inputBackgroundImage = sharpenedImage_final
                 finalBlend.intensity = factor * intensity
                 
                 guard let output = finalBlend.outputImage else { return nil }
@@ -440,7 +458,7 @@ class PhotoEditorViewModel: ObservableObject {
                 let biasG = (state.colorTint.y - neutral) * factor * intensity
                 let biasB = (state.colorTint.z - neutral) * factor * intensity
                 let matrixFilter = MTIColorMatrixFilter()
-                matrixFilter.inputImage = pixelatedImage
+                matrixFilter.inputImage = sharpenedImage_final
                 let mat = simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
                 let bias = SIMD4<Float>(biasR, biasG, biasB, 0)
                 matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: bias)
@@ -448,7 +466,7 @@ class PhotoEditorViewModel: ObservableObject {
                 tintedImage = output
             }
         } else {
-            tintedImage = pixelatedImage
+            tintedImage = sharpenedImage_final
         }
         // Inversão de cores opcional (sem duotone)
         let baseImageForInvert = tintedImage
@@ -637,6 +655,19 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             pixelatedImage = opacityImage
         }
+        // Sharpen (Unsharp Mask) if requested
+        let sharpenedImage_preview: MTIImage
+        if state.sharpen > 0.0 {
+            let usm = MTIMPSUnsharpMaskFilter()
+            usm.inputImage = pixelatedImage
+            usm.scale = min(max(state.sharpen, 0.0), 1.0)
+            usm.radius = Float(1.0 + 3.0 * Double(state.sharpen))
+            usm.threshold = 0.0
+            guard let out = usm.outputImage else { return }
+            sharpenedImage_preview = out
+        } else {
+            sharpenedImage_preview = pixelatedImage
+        }
         
         // Filtro de color tint (quando uma cor for selecionada, independente da intensidade)
         let tintedImage: MTIImage
@@ -645,7 +676,7 @@ class PhotoEditorViewModel: ObservableObject {
                 // Dual tone real: mapeia luminância para duas cores
                 // 1. Converte para grayscale primeiro para obter luminância
                 let grayscaleFilter = MTIColorMatrixFilter()
-                grayscaleFilter.inputImage = pixelatedImage
+                grayscaleFilter.inputImage = sharpenedImage_preview
                 
                 // Matriz para converter para grayscale (preserva luminância)
                 let grayscaleMatrix = simd_float4x4(
@@ -698,7 +729,7 @@ class PhotoEditorViewModel: ObservableObject {
                 // Blend final com imagem original para preservar detalhes
                 let finalBlend = MTIBlendFilter(blendMode: .normal)
                 finalBlend.inputImage = dualToneResult
-                finalBlend.inputBackgroundImage = pixelatedImage
+                finalBlend.inputBackgroundImage = sharpenedImage_preview
                 finalBlend.intensity = factor * intensity
                 
                 guard let output = finalBlend.outputImage else { return }
@@ -712,7 +743,7 @@ class PhotoEditorViewModel: ObservableObject {
                 let biasG = (state.colorTint.y - neutral) * factor * intensity
                 let biasB = (state.colorTint.z - neutral) * factor * intensity
                 let matrixFilter = MTIColorMatrixFilter()
-                matrixFilter.inputImage = pixelatedImage
+                matrixFilter.inputImage = sharpenedImage_preview
                 let mat = simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
                 let bias = SIMD4<Float>(biasR, biasG, biasB, 0)
                 matrixFilter.colorMatrix = MTIColorMatrix(matrix: mat, bias: bias)
@@ -720,7 +751,7 @@ class PhotoEditorViewModel: ObservableObject {
                 tintedImage = output
             }
         } else {
-            tintedImage = pixelatedImage
+            tintedImage = sharpenedImage_preview
         }
         
         // Filtro de inversão de cores (quando colorInvert > 0)

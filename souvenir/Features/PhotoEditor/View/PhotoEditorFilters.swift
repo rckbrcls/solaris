@@ -394,6 +394,13 @@ struct PhotoEditorFilters: View {
             f.setValue(max(1.0, CGFloat(state.pixelateAmount)), forKey: kCIInputScaleKey)
             if let o = f.outputImage { output = o }
         }
+        // Sharpen (CIUnsharpMask)
+        if state.sharpen > 0.0, let f = CIFilter(name: "CIUnsharpMask") {
+            f.setValue(output, forKey: kCIInputImageKey)
+            f.setValue(NSNumber(value: Double(1.0 + 2.0 * state.sharpen)), forKey: kCIInputRadiusKey)
+            f.setValue(NSNumber(value: Double(min(max(state.sharpen, 0.0), 1.0) * 1.2)), forKey: kCIInputIntensityKey)
+            if let o = f.outputImage { output = o }
+        }
         // Invert
         if state.colorInvert > 0.0, let f = CIFilter(name: "CIColorInvert") {
             f.setValue(output, forKey: kCIInputImageKey)
@@ -465,6 +472,10 @@ struct PhotoEditorFilters: View {
         let con = MTIContrastFilter(); con.inputImage = mtiImage; con.contrast = state.contrast; if let o = con.outputImage { mtiImage = o }
         let opa = MTIOpacityFilter(); opa.inputImage = mtiImage; opa.opacity = state.opacity; if let o = opa.outputImage { mtiImage = o }
         if state.pixelateAmount > 1.0 { let pix = MTIPixellateFilter(); pix.inputImage = mtiImage; let sc = max(CGFloat(state.pixelateAmount), 1.0); pix.scale = CGSize(width: sc, height: sc); if let o = pix.outputImage { mtiImage = o } }
+        // Sharpen (Unsharp Mask) for thumbnails
+        if state.sharpen > 0.0 {
+            let usm = MTIMPSUnsharpMaskFilter(); usm.inputImage = mtiImage; usm.scale = min(max(state.sharpen, 0.0), 1.0); usm.radius = Float(1.0 + 3.0 * Double(state.sharpen)); usm.threshold = 0.0; if let o = usm.outputImage { mtiImage = o }
+        }
         if state.colorTint.x > 0 || state.colorTint.y > 0 || state.colorTint.z > 0 {
             if state.isDualToneActive && (state.colorTintSecondary.x > 0 || state.colorTintSecondary.y > 0 || state.colorTintSecondary.z > 0) {
                 let gray = MTIColorMatrixFilter(); gray.inputImage = mtiImage
