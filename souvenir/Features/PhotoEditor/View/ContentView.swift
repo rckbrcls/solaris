@@ -162,15 +162,22 @@ struct ContentView: View {
                             DispatchQueue.global(qos: .userInitiated).async {
                                 let lib = PhotoLibrary.shared
                                 lib.ensureDirs()
-                                // Encode edição
-                                var dataOut: Data? = nil
+                                // Encode edição preservando metadados do arquivo ORIGINAL sempre que possível
                                 var ext = "heic"
-                                if let heic = exportUIImageAsHEIC(finalImage) { dataOut = heic; ext = "heic" }
-                                else if let jpg = finalImage.jpegData(compressionQuality: 1.0) { dataOut = jpg; ext = "jpg" }
-                                else if let png = finalImage.pngData() { dataOut = png; ext = "png" }
-                                guard let dataOut else { DispatchQueue.main.async { isBusy = false }; return }
-                                let editURL = lib.editsDir().appendingPathComponent("\(rec.id).\(ext)")
-                                try? dataOut.write(to: editURL)
+                                var editURL = lib.editsDir().appendingPathComponent("\(rec.id).\(ext)")
+                                if let url = writeUIImageWithSourceMetadata(finalImage, preferHEIC: true, destDir: lib.editsDir(), baseName: rec.id, sourceURL: rec.originalURL) {
+                                    editURL = url
+                                    ext = url.pathExtension.lowercased()
+                                } else {
+                                    // Fallback: sem metadados
+                                    var dataOut: Data? = nil
+                                    if let heic = exportUIImageAsHEIC(finalImage) { dataOut = heic; ext = "heic" }
+                                    else if let jpg = finalImage.jpegData(compressionQuality: 1.0) { dataOut = jpg; ext = "jpg" }
+                                    else if let png = finalImage.pngData() { dataOut = png; ext = "png" }
+                                    guard let dataOut else { DispatchQueue.main.async { isBusy = false }; return }
+                                    editURL = lib.editsDir().appendingPathComponent("\(rec.id).\(ext)")
+                                    try? dataOut.write(to: editURL)
+                                }
                                 // Atualiza thumb
                                 var thumbURL = lib.thumbsDir().appendingPathComponent("\(rec.id).jpg")
                                 if let thumbImg = finalImage.resizeToFit(maxSize: 512), let (tdata, text) = encodeThumbnailImage(thumbImg) {
@@ -182,7 +189,8 @@ struct ContentView: View {
                                 updated.editedURL = editURL
                                 updated.thumbURL = thumbURL
                                 updated.editState = editState
-                                updated.editHistory = history
+                                // Limita histórico persistido para evitar manifest grande
+                                updated.editHistory = Array(history.suffix(100))
                                 if let pos = records.firstIndex(where: { $0.id == updated.id }) {
                                     records[pos] = updated
                                 }
@@ -466,6 +474,60 @@ func getPhotoStorageDir() -> URL { PhotoLibrary.shared.storageRoot() }
 
 #Preview {
     ContentView()
+}
+
+// MARK: - Metadata-preserving write helper
+/// Writes a UIImage to disk preserving metadata from a source image URL.
+/// Returns the destination URL on success, or nil if it failed.
+func writeUIImageWithSourceMetadata(_ image: UIImage, preferHEIC: Bool, destDir: URL, baseName: String, sourceURL: URL) -> URL? {
+    let fm = FileManager.default
+    let heicUTI = UTType.heic.identifier as CFString
+    let jpegUTI = UTType.jpeg.identifier as CFString
+
+    let targetUTI: CFString = preferHEIC ? heicUTI : jpegUTI
+    let ext = preferHEIC ? "heic" : "jpg"
+    let destURL = destDir.appendingPathComponent("\(baseName).\(ext)")
+
+    guard let src = CGImageSourceCreateWithURL(sourceURL as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+    let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] ?? [:]
+    // Choose destination color space based on source profile
+    let profileName = (props[kCGImagePropertyProfileName] as? String) ?? ""
+    let destCS = profileName.lowercased().contains("p3")
+        ? (CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB())
+        : (CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB())
+    // Convert image to destination color space to avoid implicit conversions
+    guard let converted = convertUIImage(image, to: destCS), let cg = converted.cgImage else { return nil }
+    var outProps = props
+    // Force orientation to up (1) since we rasterized with correct orientation already
+    outProps[kCGImagePropertyOrientation] = 1
+    // Keep color model/profile name hints if available
+    if !profileName.isEmpty { outProps[kCGImagePropertyProfileName] = profileName }
+
+    guard let dest = CGImageDestinationCreateWithURL(destURL as CFURL, targetUTI, 1, nil) else { return nil }
+    let options: [CFString: Any] = [
+        kCGImageDestinationLossyCompressionQuality: 1.0
+    ]
+    CGImageDestinationAddImage(dest, cg, outProps as CFDictionary)
+    if CGImageDestinationFinalize(dest) {
+        return destURL
+    } else {
+        // Try JPEG fallback if HEIC failed
+        if preferHEIC {
+            return writeUIImageWithSourceMetadata(image, preferHEIC: false, destDir: destDir, baseName: baseName, sourceURL: sourceURL)
+        }
+        return nil
+    }
+}
+
+private func convertUIImage(_ image: UIImage, to colorSpace: CGColorSpace) -> UIImage? {
+    guard let cg = image.cgImage else { return nil }
+    let width = cg.width
+    let height = cg.height
+    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+    guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: bitmapInfo) else { return nil }
+    ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+    guard let outCG = ctx.makeImage() else { return nil }
+    return UIImage(cgImage: outCG, scale: image.scale, orientation: .up)
 }
 
 // MARK: - Helpers de importação e thumbnails

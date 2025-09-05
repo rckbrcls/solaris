@@ -187,7 +187,9 @@ class PhotoEditorViewModel: ObservableObject {
             if cleaned.last != s { cleaned.append(s) }
         }
         while let last = cleaned.last, last == editState { cleaned.removeLast() }
-        undoStack = cleaned
+        // Clamp to last N steps to avoid excessive manifest size
+        let limit = 100
+        undoStack = Array(cleaned.suffix(limit))
         redoStack.removeAll()
     }
 
