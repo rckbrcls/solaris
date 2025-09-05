@@ -182,7 +182,6 @@ struct PhotoEditorAdjustments: View {
     @Binding var colorInvert: Float
     @Binding var pixelateAmount: Float
     @Binding var grain: Float
-    @Binding var grainSize: Float
     @Binding var colorTint: SIMD4<Float>
     @Binding var colorTintSecondary: SIMD4<Float>
     @Binding var isDualToneActive: Bool
@@ -299,11 +298,8 @@ struct PhotoEditorAdjustments: View {
                     PixelateSlider(value: $pixelateAmount, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "grain" {
-                    VStack(spacing: 10) {
-                        GrainSlider(value: $grain, onBegin: onBeginAdjust, onEnd: onEndAdjust)
-                        GrainSizeSlider(value: $grainSize, onBegin: onBeginAdjust, onEnd: onEndAdjust)
-                    }
-                    .padding(.horizontal)
+                    GrainSlider(value: $grain, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                        .padding(.horizontal)
                 } else if selectedAdjustment == "colorTint" {
                     ColorTintControls(
                         colorTint: $colorTint,
@@ -846,27 +842,7 @@ private struct GrainSlider: View {
     }
 }
 
-private struct GrainSizeSlider: View {
-    @Binding var value: Float // 0.0 ... 1.0
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Map 0...100 -> 0.0...1.0 (fine → coarse)
-        RulerSlider(
-            value: Binding(
-                get: { (value * 100).rounded() },
-                set: { value = $0 / 100 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0)) },
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
+// GrainSizeSlider removed; grain size is fixed in pipeline
 
 private struct ColorTintSlider: View {
     @Binding var value: Float
