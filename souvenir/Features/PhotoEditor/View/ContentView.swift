@@ -495,8 +495,8 @@ func writeUIImageWithSourceMetadata(_ image: UIImage, preferHEIC: Bool, destDir:
     let destCS = profileName.lowercased().contains("p3")
         ? (CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB())
         : (CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB())
-    // Convert image to destination color space to avoid implicit conversions
-    guard let converted = convertUIImage(image, to: destCS), let cg = converted.cgImage else { return nil }
+    // Convert image to destination color space and drop alpha (JPEG/HEIC are opaque)
+    guard let converted = convertUIImage(image, to: destCS, includeAlpha: false), let cg = converted.cgImage else { return nil }
     var outProps = props
     // Force orientation to up (1) since we rasterized with correct orientation already
     outProps[kCGImagePropertyOrientation] = 1
@@ -519,12 +519,18 @@ func writeUIImageWithSourceMetadata(_ image: UIImage, preferHEIC: Bool, destDir:
     }
 }
 
-private func convertUIImage(_ image: UIImage, to colorSpace: CGColorSpace) -> UIImage? {
+private func convertUIImage(_ image: UIImage, to colorSpace: CGColorSpace, includeAlpha: Bool) -> UIImage? {
     guard let cg = image.cgImage else { return nil }
     let width = cg.width
     let height = cg.height
-    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+    let alphaInfo: CGImageAlphaInfo = includeAlpha ? .premultipliedLast : .noneSkipLast
+    let bitmapInfo = alphaInfo.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
     guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: bitmapInfo) else { return nil }
+    if !includeAlpha {
+        // Fill background to avoid unintended darkening when removing alpha
+        ctx.setFillColor(UIColor.white.cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    }
     ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
     guard let outCG = ctx.makeImage() else { return nil }
     return UIImage(cgImage: outCG, scale: image.scale, orientation: .up)
