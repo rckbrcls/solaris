@@ -37,7 +37,6 @@ struct PhotoCaptureView: View {
     @State private var zoomFactor: CGFloat = 1.0
     // Aspect ratio selection
     enum AspectOption: String, CaseIterable, Identifiable {
-        case original = "Original"
         case square = "1:1"
         case ratio4x3 = "4:3"   // portrait
         case ratio3x2 = "3:2"   // portrait
@@ -46,7 +45,6 @@ struct PhotoCaptureView: View {
         // Returns width:height factors (portrait-aware)
         var width: CGFloat {
             switch self {
-            case .original: return 0 // handled specially
             case .square: return 1
             case .ratio4x3: return 3
             case .ratio3x2: return 2
@@ -55,7 +53,6 @@ struct PhotoCaptureView: View {
         }
         var height: CGFloat {
             switch self {
-            case .original: return 0
             case .square: return 1
             case .ratio4x3: return 4
             case .ratio3x2: return 3
@@ -74,14 +71,7 @@ struct PhotoCaptureView: View {
             VStack {
                 ZStack {
                     let previewW = UIScreen.main.bounds.width
-                    let previewH: CGFloat = {
-                        switch selectedAspect {
-                        case .original:
-                            return previewW * 4.0 / 3.0 // default preview 4:3, saved will use sensor crop later
-                        default:
-                            return previewW * (selectedAspect.height / max(1, selectedAspect.width))
-                        }
-                    }()
+                    let previewH: CGFloat = previewW * (selectedAspect.height / max(1, selectedAspect.width))
                     CameraPreview(capturedImage: $capturedImage, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor)
                         .allowsHitTesting(!isDraggingDismiss)
                         .frame(width: previewW, height: previewH)
@@ -129,15 +119,16 @@ struct PhotoCaptureView: View {
                             NotificationCenter.default.post(name: .capturePhoto, object: nil)
                         }) {
                             Circle()
-                                .fill(.ultraThinMaterial)
+                                .fill(Color.white.opacity(0.12))
                                 .frame(width: 70, height: 70)
                                 .overlay(
                                     Circle()
-                                        .stroke(.thinMaterial, lineWidth: 2)
+                                        .stroke(Color.white.opacity(0.25), lineWidth: 2)
                                 )
-                                .shadow(radius: 5)
+                                .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
                         }
                         .padding(20)
+                        .offset(y: 14)
                         
                         Spacer()
                         // Additional button or user-selected functionality can be placed here
@@ -149,24 +140,29 @@ struct PhotoCaptureView: View {
             // Bottom overlay controls: grid, flash, aspect, switch
             VStack {
                 if showAspectMenu {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(AspectOption.allCases) { opt in
-                                Button(action: { withAnimation(.easeOut(duration: 0.15)) { selectedAspect = opt; showAspectMenu = false } }) {
-                                    Text(opt.rawValue)
-                                        .font(.caption.bold())
-                                        .foregroundColor(selectedAspect == opt ? .white : .primary)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            selectedAspect == opt ? Color.accentColor : Color.primary.opacity(0.08)
-                                        )
-                                        .clipShape(Capsule())
+                    HStack {
+                        Spacer(minLength: 0)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 4) {
+                                ForEach(AspectOption.allCases) { opt in
+                                    Button(action: { withAnimation(.easeOut(duration: 0.15)) { selectedAspect = opt; showAspectMenu = false } }) {
+                                        Text(opt.rawValue)
+                                            .font(.caption.bold())
+                                            .foregroundColor(selectedAspect == opt ? .white : .primary)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(
+                                                selectedAspect == opt ? Color.accentColor : Color.primary.opacity(0.08)
+                                            )
+                                            .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
+                                .padding(.horizontal, 8)
+                                .frame(maxWidth: .infinity, alignment: .center)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        Spacer(minLength: 0)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -234,7 +230,7 @@ struct PhotoCaptureView: View {
 // MARK: - Helpers
 extension PhotoCaptureView {
     private func cropToSelectedAspect(_ image: UIImage, aspect: AspectOption) -> UIImage {
-        guard aspect != .original else { return image }
+        // Always crop to selected portrait aspect
         let w = image.size.width
         let h = image.size.height
         let targetW = aspect.width
