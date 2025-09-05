@@ -675,10 +675,10 @@ private struct AdjustmentIconButton: View {
             }
             .padding(8)
             .boxBlankStyle(cornerRadius: 8, padding: 10)
-            .background(isSelected ? colorSchemeManager.primaryColor.opacity(0.10) : Color.clear)
+            .background(isActive ? colorSchemeManager.primaryColor.opacity(0.10) : Color.clear)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 3)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
