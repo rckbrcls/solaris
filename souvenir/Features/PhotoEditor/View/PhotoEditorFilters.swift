@@ -212,11 +212,6 @@ struct PhotoEditorFilters: View {
     // MARK: - Views
     private var groupList: some View {
         VStack(spacing: 8) {
-            Text("Filter Categories")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(FilterGroup.allCases, id: \.self) { g in
@@ -254,10 +249,7 @@ struct PhotoEditorFilters: View {
         VStack(spacing: 10) {
             HStack {
                 Button(action: { withAnimation { stage = .groups } }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                        Text("Categories")
-                    }
+                    Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.plain)
                 Spacer()
