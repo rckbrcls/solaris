@@ -19,35 +19,39 @@ struct PhotoEditorMainImage: View {
         GeometryReader { proxy in
             ZStack {
                 if let filtered = filteredImage {
-                    Color.clear // para ocupar todo o espaço
-                    Image(uiImage: filtered)
-                        .resizable()
-                        .renderingMode(.original)
-                        .interpolation(.high)
-                        .antialiased(true)
-                        .matchedGeometryEffect(id: matchedID, in: namespace, isSource: false)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
-                        .animation(.none, value: filtered)
+                    VStack { Spacer(minLength: 0)
+                        Image(uiImage: filtered)
+                            .resizable()
+                            .renderingMode(.original)
+                            .interpolation(.high)
+                            .antialiased(true)
+                            .matchedGeometryEffect(id: matchedID, in: namespace, isSource: false)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: proxy.size.width)
+                            .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
+                            .animation(.none, value: filtered)
+                    }
                 } else if let original = image {
-                    Color.clear
-                    Image(uiImage: original)
-                        .resizable()
-                        .renderingMode(.original)
-                        .interpolation(.high)
-                        .antialiased(true)
-                        .matchedGeometryEffect(id: matchedID, in: namespace, isSource: false)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
+                    VStack { Spacer(minLength: 0)
+                        Image(uiImage: original)
+                            .resizable()
+                            .renderingMode(.original)
+                            .interpolation(.high)
+                            .antialiased(true)
+                            .matchedGeometryEffect(id: matchedID, in: namespace, isSource: false)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: proxy.size.width)
+                            .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
+                    }
                 } else {
                     Text("Carregue ou selecione uma imagem para editar")
                         .font(.headline)
                         .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 }
+                
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
         }
         .frame(maxHeight: .infinity)
     }

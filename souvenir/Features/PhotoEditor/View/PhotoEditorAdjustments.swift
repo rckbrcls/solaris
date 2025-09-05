@@ -31,8 +31,8 @@ struct RulerSlider: View {
         totalTicks: Int = 31, // padronizado ~30 intervalos
         majorTickEvery: Int = 5,
         thumbSize: CGFloat = 28,
-        rulerHeight: CGFloat = 18,
-        sliderHeight: CGFloat = 48,
+        rulerHeight: CGFloat = 16,
+        sliderHeight: CGFloat = 44,
         format: @escaping (Float) -> String = { String(format: "%.0f", $0) },
         onEditingBegan: (() -> Void)? = nil,
         onEditingEnded: (() -> Void)? = nil

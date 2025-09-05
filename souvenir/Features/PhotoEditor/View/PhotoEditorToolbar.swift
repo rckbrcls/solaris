@@ -50,9 +50,9 @@ struct CategoryButton: View {
                         : colorSchemeManager.primaryColor.opacity(0.55)
                     )
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal)
-            .boxBlankStyle(cornerRadius: 12, padding: 0, maxWidth: CGFloat.infinity, height: 40)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .boxBlankStyle(cornerRadius: 12, padding: 0, maxWidth: CGFloat.infinity, height: 36)
             .background(
                 selectedCategory == category
                 ? colorSchemeManager.primaryColor.opacity(0.08)

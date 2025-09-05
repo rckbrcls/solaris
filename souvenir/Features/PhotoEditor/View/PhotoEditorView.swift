@@ -88,7 +88,9 @@ struct PhotoEditorView: View {
             hasChanges = (newValue != initialEditState)
         }
         .onPreferenceChange(EditorAdjustmentsHeightKey.self) { h in
-            adjustmentsHeight = h
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                adjustmentsHeight = h
+            }
         }
         .onPreferenceChange(EditorImageHeightKey.self) { h in
             imageHeight = h
@@ -142,23 +144,34 @@ private extension PhotoEditorView {
 
     @ViewBuilder
     func adjustmentsContainer(geometry: GeometryProxy) -> some View {
-        VStack {
+        // Build the content first and measure its intrinsic height
+        let content = VStack(spacing: 8) {
             categoryView()
                 .animation(.easeOut(duration: 0.28), value: selectedCategory)
             PhotoEditorToolbar(
                 selectedCategory: $selectedCategory,
                 bottomSize: $bottomSize
             )
-            .padding(.bottom, 20)
+            .padding(.bottom, 8)
         }
-        .padding(.vertical)
-        .background(colorSchemeManager.secondaryColor)
-        .padding(.bottom, geometry.safeAreaInsets.bottom)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        
+        // Measure only the intrinsic content (before adding outer background/padding)
         .background(
             GeometryReader { proxy in
-                Color.clear.preference(key: EditorAdjustmentsHeightKey.self, value: proxy.size.height + geometry.safeAreaInsets.bottom)
+                Color.clear
+                    .preference(key: EditorAdjustmentsHeightKey.self, value: proxy.size.height)
             }
         )
+
+        content
+            .background(colorSchemeManager.secondaryColor)
+            
+            .padding(.bottom, max(6, geometry.safeAreaInsets.bottom))
+            .frame(minHeight: adjustmentsHeight + max(6, geometry.safeAreaInsets.bottom))
+            // Elimina qualquer hairline visual entre imagem e menu
+            .offset(y: -0.5)
     }
 
     @ViewBuilder
