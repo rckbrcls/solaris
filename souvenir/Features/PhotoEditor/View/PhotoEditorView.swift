@@ -164,8 +164,10 @@ private extension PhotoEditorView {
     @ViewBuilder
     func categoryView() -> some View {
         if selectedCategory == "filters" {
-            Text("Filtros desabilitados nesta versão").padding()
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            PhotoEditorFilters(
+                editState: $viewModel.editState,
+                registerUndo: { viewModel.registerUndoPoint() }
+            )
         } else if selectedCategory == "edit" {
             PhotoEditorAdjustments(
                 contrast: $viewModel.editState.contrast,
