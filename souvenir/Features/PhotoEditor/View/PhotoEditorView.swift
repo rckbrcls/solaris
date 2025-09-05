@@ -77,28 +77,7 @@ struct PhotoEditorView: View {
 
     var body: some View {
         AnyView(rootView())
-        // Modal de salvar/descartar ao tentar voltar
-        .confirmationDialog("Salvar alterações?", isPresented: $showSaveDiscardModal, titleVisibility: .visible) {
-            Button("Salvar", role: .none) {
-                isSaving = true
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let finalImage = viewModel.generateFinalImage()
-                    DispatchQueue.main.async {
-                        onFinishEditing?(finalImage, viewModel.editState, viewModel.undoStack, true)
-                        viewModel.editState = initialEditState
-                        isSaving = false
-                        dismiss()
-                    }
-                }
-            }
-            Button("Descartar", role: .destructive) {
-                onFinishEditing?(nil, nil, viewModel.undoStack, false)
-                dismiss()
-            }
-            Button("Cancelar", role: .cancel) {}
-        } message: {
-            Text("Você deseja salvar as alterações feitas nesta edição?")
-        }
+        // Modal padrão removido; usamos um overlay customizado
         .ignoresSafeArea(edges: .bottom)
         .onAppear {
             viewModel.editState = initialEditState
@@ -239,6 +218,8 @@ private extension PhotoEditorView {
             }
             LoadingOverlay(isVisible: $isSaving, title: "Salvando edição...")
             topControls
+            // Custom Save/Discard overlay
+            if showSaveDiscardModal { saveDiscardOverlay }
         }
     }
 
@@ -308,6 +289,74 @@ private extension PhotoEditorView {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             Spacer()
+        }
+    }
+
+    // Custom modal for save/discard with our app style
+    var saveDiscardOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { showSaveDiscardModal = false } }
+            VStack(spacing: 14) {
+                Text("Salvar alterações?")
+                    .font(.headline)
+                Text("Você deseja salvar as alterações feitas nesta edição?")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                VStack(spacing: 10) {
+                    Button(action: { performSaveAndExit() }) {
+                        Text("Salvar")
+                            .font(.body.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundColor(.white)
+                    }
+                    Button(action: {
+                        onFinishEditing?(nil, nil, viewModel.undoStack, false)
+                        dismiss()
+                    }) {
+                        Text("Descartar")
+                            .font(.body.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundColor(.white)
+                    }
+                    Button(action: { withAnimation(.easeOut(duration: 0.2)) { showSaveDiscardModal = false } }) {
+                        Text("Cancelar")
+                            .font(.body.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.15), lineWidth: 1))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: 360)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.12), lineWidth: 1))
+            .shadow(radius: 12)
+            .padding(.horizontal, 24)
+            .transition(.scale(scale: 0.95).combined(with: .opacity))
+        }
+    }
+
+    func performSaveAndExit() {
+        showSaveDiscardModal = false
+        isSaving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let finalImage = viewModel.generateFinalImage()
+            DispatchQueue.main.async {
+                onFinishEditing?(finalImage, viewModel.editState, viewModel.undoStack, true)
+                viewModel.editState = initialEditState
+                isSaving = false
+                dismiss()
+            }
         }
     }
 }
