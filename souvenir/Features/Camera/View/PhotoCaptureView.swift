@@ -35,6 +35,39 @@ struct PhotoCaptureView: View {
     @State private var isFlashOn: Bool = false
     @State private var isGridOn: Bool = false
     @State private var zoomFactor: CGFloat = 1.0
+    // Aspect ratio selection
+    enum AspectOption: String, CaseIterable, Identifiable {
+        case original = "Original"
+        case square = "1:1"
+        case ratio4x3 = "4:3"
+        case ratio3x2 = "3:2"
+        case ratio16x9 = "16:9"
+        case ratio9x16 = "9:16"
+        var id: String { rawValue }
+        // Returns width:height factors (portrait-aware)
+        var width: CGFloat {
+            switch self {
+            case .original: return 0 // handled specially
+            case .square: return 1
+            case .ratio4x3: return 4
+            case .ratio3x2: return 3
+            case .ratio16x9: return 9
+            case .ratio9x16: return 9
+            }
+        }
+        var height: CGFloat {
+            switch self {
+            case .original: return 0
+            case .square: return 1
+            case .ratio4x3: return 3
+            case .ratio3x2: return 2
+            case .ratio16x9: return 16 // portrait framing of 16:9
+            case .ratio9x16: return 16
+            }
+        }
+    }
+    @State private var selectedAspect: AspectOption = .ratio4x3
+    @State private var showAspectMenu: Bool = false
     @Environment(\.dismiss) var dismiss
     @State private var isDraggingDismiss: Bool = false
     
@@ -43,9 +76,19 @@ struct PhotoCaptureView: View {
             Color(UIColor.systemBackground).ignoresSafeArea()
             VStack {
                 ZStack {
+                    let previewW = UIScreen.main.bounds.width
+                    let previewH: CGFloat = {
+                        switch selectedAspect {
+                        case .original:
+                            return previewW * 4.0 / 3.0 // default preview 4:3, saved will use sensor crop later
+                        default:
+                            return previewW * (selectedAspect.height / max(1, selectedAspect.width))
+                        }
+                    }()
                     CameraPreview(capturedImage: $capturedImage, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor)
                         .allowsHitTesting(!isDraggingDismiss)
-                        .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 16.0 / 9.0)
+                        .frame(width: previewW, height: previewH)
+                        .clipped()
                         .cornerRadius(20)
                 
                 if isGridOn {
@@ -68,7 +111,7 @@ struct PhotoCaptureView: View {
                     }
                 }
                 
-                VStack {
+                VStack(spacing: 8) {
                     HStack {
                         Button(action: {
                             dismiss()
@@ -78,8 +121,6 @@ struct PhotoCaptureView: View {
                         }
                         
                         Spacer()
-                        
-                       
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -108,41 +149,67 @@ struct PhotoCaptureView: View {
                 .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 16.0 / 9.0)
             }
             
-            HStack(alignment: .center) {
-                Button(action: {
-                    isGridOn.toggle()
-                }) {
-                    Image(systemName: isGridOn ? "square.grid.3x3.fill" : "square.grid.3x3")
-                        .cameraIconStyle()
+            // Bottom overlay controls: grid, flash, aspect, switch
+            VStack {
+                if showAspectMenu {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(AspectOption.allCases) { opt in
+                                Button(action: { withAnimation(.easeOut(duration: 0.15)) { selectedAspect = opt; showAspectMenu = false } }) {
+                                    Text(opt.rawValue)
+                                        .font(.caption.bold())
+                                        .foregroundColor(selectedAspect == opt ? .white : .primary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            selectedAspect == opt ? Color.accentColor : Color.primary.opacity(0.08)
+                                        )
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                
-                Spacer()
-                
-                Button(action: {
-                    isFlashOn.toggle()
-                }) {
-                    Image(systemName: isFlashOn ? "bolt.fill" : "bolt")
+                HStack(alignment: .center) {
+                    Button(action: { isGridOn.toggle() }) {
+                        Image(systemName: isGridOn ? "square.grid.3x3.fill" : "square.grid.3x3")
+                            .cameraIconStyle()
+                    }
+                    Spacer()
+                    Button(action: { isFlashOn.toggle() }) {
+                        Image(systemName: isFlashOn ? "bolt.fill" : "bolt")
+                            .cameraIconStyle()
+                    }
+                    Spacer()
+                    Button(action: { withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { showAspectMenu.toggle() } }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "rectangle.split.2x1")
+                            Text(selectedAspect.rawValue)
+                                .font(.caption)
+                        }
                         .cameraIconStyle()
+                    }
+                    Spacer()
+                    Button(action: { NotificationCenter.default.post(name: .switchCamera, object: nil) }) {
+                        Image(systemName: "camera.rotate")
+                            .cameraIconStyle()
+                    }
                 }
-                
-                Spacer()
-                
-                Button(action: {
-                    NotificationCenter.default.post(name: .switchCamera, object: nil)
-                }) {
-                    Image(systemName: "camera.rotate")
-                        .cameraIconStyle()
-                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             
-                Spacer()
-            }
+        }
             .navigationBarBackButtonHidden(true)
             .onChange(of: capturedImage) { newImage in
                 if let image = newImage {
-                    onPhotoCaptured(image.fixOrientation())
+                    let fixed = image.fixOrientation()
+                    let cropped = cropToSelectedAspect(fixed, aspect: selectedAspect)
+                    onPhotoCaptured(cropped)
                 }
             }
             .padding(.top)
@@ -168,4 +235,31 @@ struct PhotoCaptureView: View {
 
 #Preview {
     PhotoCaptureView(onPhotoCaptured: { _ in })
+}
+
+// MARK: - Helpers
+extension PhotoCaptureView {
+    private func cropToSelectedAspect(_ image: UIImage, aspect: AspectOption) -> UIImage {
+        guard aspect != .original else { return image }
+        let w = image.size.width
+        let h = image.size.height
+        let targetW = aspect.width
+        let targetH = aspect.height
+        guard targetW > 0, targetH > 0 else { return image }
+        let targetRatio = targetW / targetH
+        let imageRatio = w / h
+        var cropRect: CGRect
+        if imageRatio > targetRatio {
+            // image is wider than target; crop width
+            let newW = h * targetRatio
+            cropRect = CGRect(x: (w - newW) / 2.0, y: 0, width: newW, height: h)
+        } else {
+            // image is taller than target; crop height
+            let newH = w / targetRatio
+            cropRect = CGRect(x: 0, y: (h - newH) / 2.0, width: w, height: newH)
+        }
+        guard let cg = image.cgImage?.cropping(to: cropRect.integral) else { return image }
+        // Return cropped (keeping original scale/orientation as .up)
+        return UIImage(cgImage: cg, scale: image.scale, orientation: .up)
+    }
 }
