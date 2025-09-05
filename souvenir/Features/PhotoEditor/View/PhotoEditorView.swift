@@ -262,7 +262,7 @@ private extension PhotoEditorView {
                         }
                     }) {
                         Image(systemName: "xmark")
-                            .editorIconStyle()
+                            .editorIconStyle(size: 36)
                     }
                 Spacer()
                 Button(action: {
@@ -273,7 +273,7 @@ private extension PhotoEditorView {
                     }
                 }) {
                     Image(systemName: "arrow.uturn.backward")
-                        .editorIconStyle()
+                        .editorIconStyle(size: 36)
                 }
                 .disabled(!viewModel.canUndo)
                 .opacity(viewModel.canUndo ? 1.0 : 0.35)
@@ -298,7 +298,7 @@ private extension PhotoEditorView {
                     }
                 }) {
                     Image(systemName: "arrow.uturn.forward")
-                        .editorIconStyle()
+                        .editorIconStyle(size: 36)
                 }
                 .disabled(!viewModel.canRedo)
                 .opacity(viewModel.canRedo ? 1.0 : 0.35)
@@ -313,8 +313,8 @@ private extension PhotoEditorView {
                         }
                 )
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.horizontal, 12)
+            .padding(.top, 4) // move closer to top
             Spacer()
         }
     }
