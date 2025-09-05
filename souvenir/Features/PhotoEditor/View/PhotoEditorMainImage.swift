@@ -28,6 +28,7 @@ struct PhotoEditorMainImage: View {
                             .matchedGeometryEffect(id: matchedID, in: namespace, isSource: false)
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: proxy.size.width)
+                            .cornerRadius(20)
                             .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
                             .animation(.none, value: filtered)
                         Spacer(minLength: 0)
@@ -42,6 +43,7 @@ struct PhotoEditorMainImage: View {
                             .matchedGeometryEffect(id: matchedID, in: namespace, isSource: false)
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: proxy.size.width)
+                            .cornerRadius(20)
                             .zoomable(minZoomScale: 1, doubleTapZoomScale: 3)
                         Spacer(minLength: 0)
                     }

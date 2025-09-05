@@ -39,19 +39,17 @@ struct PhotoCaptureView: View {
     enum AspectOption: String, CaseIterable, Identifiable {
         case original = "Original"
         case square = "1:1"
-        case ratio4x3 = "4:3"
-        case ratio3x2 = "3:2"
-        case ratio16x9 = "16:9"
-        case ratio9x16 = "9:16"
+        case ratio4x3 = "4:3"   // portrait
+        case ratio3x2 = "3:2"   // portrait
+        case ratio9x16 = "9:16" // portrait
         var id: String { rawValue }
         // Returns width:height factors (portrait-aware)
         var width: CGFloat {
             switch self {
             case .original: return 0 // handled specially
             case .square: return 1
-            case .ratio4x3: return 4
-            case .ratio3x2: return 3
-            case .ratio16x9: return 9
+            case .ratio4x3: return 3
+            case .ratio3x2: return 2
             case .ratio9x16: return 9
             }
         }
@@ -59,9 +57,8 @@ struct PhotoCaptureView: View {
             switch self {
             case .original: return 0
             case .square: return 1
-            case .ratio4x3: return 3
-            case .ratio3x2: return 2
-            case .ratio16x9: return 16 // portrait framing of 16:9
+            case .ratio4x3: return 4
+            case .ratio3x2: return 3
             case .ratio9x16: return 16
             }
         }
@@ -185,12 +182,9 @@ struct PhotoCaptureView: View {
                     }
                     Spacer()
                     Button(action: { withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { showAspectMenu.toggle() } }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "rectangle.split.2x1")
-                            Text(selectedAspect.rawValue)
-                                .font(.caption)
-                        }
-                        .cameraIconStyle()
+                        Image(systemName: "rectangle.split.2x1")
+                            .cameraIconStyle()
+                            .accessibilityLabel("Aspect Ratio")
                     }
                     Spacer()
                     Button(action: { NotificationCenter.default.post(name: .switchCamera, object: nil) }) {
