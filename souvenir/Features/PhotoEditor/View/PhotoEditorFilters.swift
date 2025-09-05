@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreImage
 import UIKit
+import MetalPetal
 
 struct FilterPreset: Identifiable, Hashable {
     let id: String
@@ -35,6 +36,7 @@ struct PhotoEditorFilters: View {
 
     @State private var thumbs: [String: UIImage] = [:]
     private let ciContext = CIContext(options: [CIContextOption.useSoftwareRenderer: false])
+    private let mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
 
     private var souvenirPresets: [FilterPreset] {
         [
@@ -337,6 +339,9 @@ struct PhotoEditorFilters: View {
     }
 
     private func renderThumbnail(from image: UIImage, with state: PhotoEditState, maxSize: CGFloat) -> UIImage? {
+        if let metal = renderThumbnailMetalPetal(from: image, with: state, maxSize: maxSize) {
+            return metal
+        }
         let scaled = downscale(image: image, maxSide: Int(maxSize))
         guard let base = scaled, let ci = CIImage(image: base) else { return nil }
         var output: CIImage = ci
@@ -394,6 +399,56 @@ struct PhotoEditorFilters: View {
             return UIImage(cgImage: cg, scale: base.scale, orientation: .up)
         }
         return nil
+    }
+
+    private func renderThumbnailMetalPetal(from image: UIImage, with state: PhotoEditState, maxSize: CGFloat) -> UIImage? {
+        guard let mtiContext else { return nil }
+        guard let scaled = downscale(image: image, maxSide: Int(maxSize)), let cg = scaled.cgImage else { return nil }
+        var mtiImage = MTIImage(cgImage: cg, options: [.SRGB: false], isOpaque: true)
+        let sat = MTISaturationFilter(); sat.inputImage = mtiImage; sat.saturation = state.saturation; if let o = sat.outputImage { mtiImage = o }
+        if state.vibrance != 0.0 { let vib = MTIVibranceFilter(); vib.inputImage = mtiImage; vib.amount = state.vibrance; if let o = vib.outputImage { mtiImage = o } }
+        let exp = MTIExposureFilter(); exp.inputImage = mtiImage; exp.exposure = state.exposure; if let o = exp.outputImage { mtiImage = o }
+        let bri = MTIBrightnessFilter(); bri.inputImage = mtiImage; bri.brightness = state.brightness; if let o = bri.outputImage { mtiImage = o }
+        let con = MTIContrastFilter(); con.inputImage = mtiImage; con.contrast = state.contrast; if let o = con.outputImage { mtiImage = o }
+        let opa = MTIOpacityFilter(); opa.inputImage = mtiImage; opa.opacity = state.opacity; if let o = opa.outputImage { mtiImage = o }
+        if state.pixelateAmount > 1.0 { let pix = MTIPixellateFilter(); pix.inputImage = mtiImage; let sc = max(CGFloat(state.pixelateAmount), 1.0); pix.scale = CGSize(width: sc, height: sc); if let o = pix.outputImage { mtiImage = o } }
+        if state.colorTint.x > 0 || state.colorTint.y > 0 || state.colorTint.z > 0 {
+            if state.isDualToneActive && (state.colorTintSecondary.x > 0 || state.colorTintSecondary.y > 0 || state.colorTintSecondary.z > 0) {
+                let gray = MTIColorMatrixFilter(); gray.inputImage = mtiImage
+                let grayscaleMatrix = simd_float4x4(
+                    SIMD4<Float>(0.299, 0.299, 0.299, 0),
+                    SIMD4<Float>(0.587, 0.587, 0.587, 0),
+                    SIMD4<Float>(0.114, 0.114, 0.114, 0),
+                    SIMD4<Float>(0, 0, 0, 1)
+                )
+                gray.colorMatrix = MTIColorMatrix(matrix: grayscaleMatrix, bias: SIMD4<Float>(0, 0, 0, 0))
+                guard let grayImg = gray.outputImage else { return nil }
+                let intensity = max(0, min(1, state.colorTintIntensity))
+                let factor = max(0, min(1, state.colorTintFactor))
+                let shadow = MTIImage(color: MTIColor(red: state.colorTint.x, green: state.colorTint.y, blue: state.colorTint.z, alpha: 1), sRGB: false, size: grayImg.size)
+                let mul = MTIBlendFilter(blendMode: .multiply); mul.inputImage = shadow; mul.inputBackgroundImage = grayImg; mul.intensity = factor * intensity
+                guard let mulImg = mul.outputImage else { return nil }
+                let hi = MTIImage(color: MTIColor(red: state.colorTintSecondary.x, green: state.colorTintSecondary.y, blue: state.colorTintSecondary.z, alpha: 1), sRGB: false, size: grayImg.size)
+                let scr = MTIBlendFilter(blendMode: .screen); scr.inputImage = hi; scr.inputBackgroundImage = mulImg; scr.intensity = factor * intensity * 0.7
+                guard let duo = scr.outputImage else { return nil }
+                let fin = MTIBlendFilter(blendMode: .normal); fin.inputImage = duo; fin.inputBackgroundImage = mtiImage; fin.intensity = factor * intensity
+                if let o = fin.outputImage { mtiImage = o }
+            } else {
+                let neutral: Float = 0.5
+                let intensity = max(0, min(1, state.colorTintIntensity))
+                let factor = max(0, min(1, state.colorTintFactor))
+                let biasR = (state.colorTint.x - neutral) * factor * intensity
+                let biasG = (state.colorTint.y - neutral) * factor * intensity
+                let biasB = (state.colorTint.z - neutral) * factor * intensity
+                let mat = MTIColorMatrixFilter(); mat.inputImage = mtiImage
+                mat.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1)), bias: SIMD4<Float>(biasR, biasG, biasB, 0))
+                if let o = mat.outputImage { mtiImage = o }
+            }
+        }
+        do {
+            let out = try mtiContext.makeCGImage(from: mtiImage)
+            return UIImage(cgImage: out, scale: scaled.scale, orientation: .up)
+        } catch { return nil }
     }
 
     private func downscale(image: UIImage, maxSide: Int) -> UIImage? {
