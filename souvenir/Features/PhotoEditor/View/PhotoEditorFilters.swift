@@ -46,13 +46,6 @@ struct PhotoEditorFilters: View {
     private var classicsPresets: [FilterPreset] {
         [
             FilterPreset(
-                id: "none",
-                name: "None",
-                subtitle: nil,
-                swatch: [.gray.opacity(0.4), .gray.opacity(0.2)],
-                state: PhotoEditState()
-            ),
-            FilterPreset(
                 id: "bw",
                 name: "B&W",
                 subtitle: "Monochrome",
@@ -731,7 +724,6 @@ struct PhotoEditorFilters: View {
                 Spacer()
                 Text(selectedGroup.rawValue)
                     .font(.headline)
-                Spacer()
             }
             .padding(.horizontal)
 
