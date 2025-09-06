@@ -69,6 +69,7 @@ class PhotoEditorViewModel: ObservableObject {
     var canRedo: Bool { !redoStack.isEmpty }
     private var inChangeTransaction: Bool = false
     private var filterChangePending: Bool = false // Flag para rastrear se mudanças de filtro precisam ser salvas no undo
+    private var interactionStartState: CompleteEditState? = nil // Estado no início da interação (para verificar se houve mudanças)
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
     public var previewBase: UIImage?
@@ -192,17 +193,30 @@ class PhotoEditorViewModel: ObservableObject {
         guard !isInteracting else { return }
         isInteracting = true
         if let low = previewBaseLow { previewBase = low }
-        // register an undo point at the start of a gesture/transaction
-        beginChangeTransaction()
+        
+        // Salva o estado inicial da interação (sem adicionar ao undo ainda)
+        interactionStartState = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+        inChangeTransaction = true
     }
 
     func endInteractiveAdjustments() {
         isInteracting = false
         if let high = previewBaseHigh { previewBase = high }
-        // finish the current transaction
-        endChangeTransaction()
-        // Marca que mudanças de filtro pendentes foram consolidadas em ajustes manuais
-        filterChangePending = false
+        
+        // Verifica se houve mudanças efetivas comparando com o estado inicial
+        let currentState = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+        if let startState = interactionStartState, startState != currentState {
+            // Houve mudanças efetivas, registra o undo point
+            undoStack.append(startState)
+            redoStack.removeAll()
+            // Reset da flag pois ajustes manuais consolidam mudanças de filtro
+            filterChangePending = false
+        }
+        
+        // Limpa estado da transação
+        inChangeTransaction = false
+        interactionStartState = nil
+        
         // Regerar preview final em alta usando o estado combinado
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
