@@ -49,16 +49,26 @@ struct CategoryButton: View {
                         ? colorSchemeManager.primaryColor
                         : colorSchemeManager.primaryColor.opacity(0.55)
                     )
+                    .scaleEffect(selectedCategory == category ? 1.1 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: selectedCategory == category)
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
-            .boxBlankStyle(cornerRadius: 12, padding: 0, maxWidth: CGFloat.infinity, height: 36)
-            .background(
-                selectedCategory == category
-                ? colorSchemeManager.primaryColor.opacity(0.08)
-                : Color.clear
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        selectedCategory == category 
+                        ? colorSchemeManager.primaryColor.opacity(0.6)
+                        : Color.primary.opacity(0.08), 
+                        lineWidth: selectedCategory == category ? 2 : 1
+                    )
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory == category)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .scaleEffect(selectedCategory == category ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory == category)
         }
+        .buttonStyle(.plain)
     }
 }
