@@ -132,7 +132,7 @@ struct PhotoEditorFilters: View {
                     s.colorTintSecondary = SIMD4<Float>(0.0, 0.15, 0.90, 1.0)
                     s.isDualToneActive = true
                     s.colorTintIntensity = 1.0
-                    s.colorTintFactor = 0.60
+                    s.colorTintFactor = 0.80
                     s.grain = 0.025
                     s.clarity = 0.20
                     return s
@@ -152,8 +152,8 @@ struct PhotoEditorFilters: View {
                     s.colorTint = SIMD4<Float>(1.0, 0.15, 0.15, 1.0)
                     s.colorTintSecondary = SIMD4<Float>(0.85, 0.25, 0.25, 1.0)
                     s.isDualToneActive = true
-                    s.colorTintIntensity = 0.95
-                    s.colorTintFactor = 0.45
+                    s.colorTintIntensity = 1.0
+                    s.colorTintFactor = 0.75
                     s.grain = 0.03
                     s.sharpen = 0.15
                     return s
@@ -172,8 +172,8 @@ struct PhotoEditorFilters: View {
                     s.colorTint = SIMD4<Float>(0.75, 0.25, 0.85, 1.0)
                     s.colorTintSecondary = SIMD4<Float>(0.90, 0.50, 0.95, 1.0)
                     s.isDualToneActive = true
-                    s.colorTintIntensity = 0.90
-                    s.colorTintFactor = 0.40
+                    s.colorTintIntensity = 1.0
+                    s.colorTintFactor = 0.70
                     s.grain = 0.02
                     s.brightness = 0.05
                     s.fade = 0.10
