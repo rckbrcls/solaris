@@ -37,9 +37,17 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
 
             let photoOutput = AVCapturePhotoOutput()
             photoOutput.isHighResolutionCaptureEnabled = true
+            
+            // Configura qualidade máxima
             if #available(iOS 15.0, *) {
                 photoOutput.maxPhotoQualityPrioritization = .quality
             }
+            
+            // Habilita captura em formato máximo disponível
+            if #available(iOS 14.0, *) {
+                photoOutput.isAppleProRAWEnabled = photoOutput.isAppleProRAWSupported
+            }
+            
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
                 DispatchQueue.main.async { self.photoOutput = photoOutput }
@@ -107,11 +115,29 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     }
     
     @objc func capturePhoto() {
-        let settings = AVCapturePhotoSettings()
+        // Configura qualidade máxima e formato
+        var settings: AVCapturePhotoSettings
+        
+        if #available(iOS 14.0, *) {
+            let availableFormats = photoOutput?.availablePhotoCodecTypes ?? []
+            if availableFormats.contains(.hevc) {
+                settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
+            } else if availableFormats.contains(.jpeg) {
+                settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+            } else {
+                settings = AVCapturePhotoSettings()
+            }
+        } else {
+            settings = AVCapturePhotoSettings()
+        }
+        
         settings.isHighResolutionPhotoEnabled = true
+        
+        // Configura qualidade máxima
         if #available(iOS 15.0, *) {
             settings.photoQualityPrioritization = .quality
         }
+        
         if isFlashOn.wrappedValue {
             settings.flashMode = .on
         } else {

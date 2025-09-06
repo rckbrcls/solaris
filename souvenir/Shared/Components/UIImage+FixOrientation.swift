@@ -96,25 +96,35 @@ extension UIImage {
     }
     
     func horizontallyMirrored() -> UIImage {
-        // Cria uma imagem espelhada horizontalmente
+        // Cria uma imagem espelhada horizontalmente mantendo qualidade máxima
         guard let cgImage = self.cgImage else { return self }
         
         let width = cgImage.width
         let height = cgImage.height
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        
+        // Usa o mesmo colorSpace da imagem original para evitar conversões
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        
+        // Mantém as configurações originais da imagem
+        let bitsPerComponent = cgImage.bitsPerComponent
+        let bytesPerRow = cgImage.bytesPerRow
+        let bitmapInfo = cgImage.bitmapInfo
         
         guard let context = CGContext(
             data: nil,
             width: width,
             height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
+            bitsPerComponent: bitsPerComponent,
+            bytesPerRow: 0, // Let system calculate optimal row size
             space: colorSpace,
-            bitmapInfo: bitmapInfo
+            bitmapInfo: bitmapInfo.rawValue
         ) else { 
-            return self
+            // Fallback: se falhar, tenta com configurações seguras
+            return horizontallyMirroredFallback()
         }
+        
+        // Configura interpolação de alta qualidade
+        context.interpolationQuality = .high
         
         // Aplica transformação de espelhamento horizontal
         context.translateBy(x: CGFloat(width), y: 0)
@@ -122,9 +132,32 @@ extension UIImage {
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
         
         guard let newCGImage = context.makeImage() else { 
-            return self
+            return horizontallyMirroredFallback()
         }
         
+        // Preserva a escala original e metadados
         return UIImage(cgImage: newCGImage, scale: self.scale, orientation: .up)
+    }
+    
+    private func horizontallyMirroredFallback() -> UIImage {
+        // Método alternativo usando UIGraphicsImageRenderer (mais seguro)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = self.scale
+        format.opaque = false // Preserva transparência se houver
+        
+        let renderer = UIGraphicsImageRenderer(size: self.size, format: format)
+        return renderer.image { context in
+            let cgContext = context.cgContext
+            
+            // Configura interpolação de alta qualidade
+            cgContext.interpolationQuality = .high
+            
+            // Aplica transformação de espelhamento
+            cgContext.translateBy(x: self.size.width, y: 0)
+            cgContext.scaleBy(x: -1.0, y: 1.0)
+            
+            // Desenha a imagem
+            self.draw(in: CGRect(origin: .zero, size: self.size))
+        }
     }
 }
