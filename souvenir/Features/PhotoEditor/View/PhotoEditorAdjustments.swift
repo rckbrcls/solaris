@@ -525,10 +525,20 @@ private struct ColorTintControls: View {
                                         .onEnded { outcome in
                                             switch outcome {
                                             case .first:
-                                                // Long press: set secondary for dual tone (only if distinct)
+                                                // Long press: set/remove secondary for dual tone
                                                 if colorTint.w > 0 {
                                                     let candidate = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
-                                                    if !(colorEquals(colorTint, candidate) || colorsAreVerySimilar(colorTint, candidate)) {
+                                                    
+                                                    // Se a mesma cor já está aplicada como secundária, remove
+                                                    if isDualToneActive && colorEquals(colorTintSecondary, candidate) {
+                                                        onBeginAdjust?()
+                                                        isDualToneActive = false
+                                                        colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
+                                                        let gen = UIImpactFeedbackGenerator(style: .medium)
+                                                        gen.impactOccurred()
+                                                        onEndAdjust?()
+                                                    } else if !(colorEquals(colorTint, candidate) || colorsAreVerySimilar(colorTint, candidate)) {
+                                                        // Aplica nova cor secundária se for diferente da primária
                                                         onBeginAdjust?()
                                                         colorTintSecondary = candidate
                                                         isDualToneActive = true
@@ -536,24 +546,43 @@ private struct ColorTintControls: View {
                                                         gen.impactOccurred()
                                                         onEndAdjust?()
                                                     } else {
+                                                        // Mesma cor da primária, não pode ser secundária
                                                         let gen = UIImpactFeedbackGenerator(style: .rigid)
                                                         gen.impactOccurred(intensity: 0.5)
                                                     }
                                                 }
                                             case .second:
-                                                // Tap: select primary
-                                                onBeginAdjust?()
-                                                let hadColor = (colorTint.w > 0)
-                                                colorTint = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
-                                                colorTintIntensity = 0.9
-                                                if !hadColor { colorTintFactor = 0.30 }
-                                                if isDualToneActive && colorsAreVerySimilar(colorTint, colorTintSecondary) {
-                                                    isDualToneActive = false
-                                                    colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
+                                                // Tap: select/remove primary
+                                                let candidate = SIMD4<Float>(x: preset.x, y: preset.y, z: preset.z, w: 1.0)
+                                                
+                                                // Se a mesma cor já está aplicada como primária, remove
+                                                if colorEquals(colorTint, candidate) {
+                                                    onBeginAdjust?()
+                                                    colorTint = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
+                                                    // Se havia dual tone, também remove
+                                                    if isDualToneActive {
+                                                        isDualToneActive = false
+                                                        colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
+                                                    }
+                                                    let gen = UIImpactFeedbackGenerator(style: .medium)
+                                                    gen.impactOccurred()
+                                                    onEndAdjust?()
+                                                } else {
+                                                    // Aplica nova cor primária
+                                                    onBeginAdjust?()
+                                                    let hadColor = (colorTint.w > 0)
+                                                    colorTint = candidate
+                                                    colorTintIntensity = 0.9
+                                                    if !hadColor { colorTintFactor = 0.30 }
+                                                    // Remove dual tone se nova cor for muito similar à secundária
+                                                    if isDualToneActive && colorsAreVerySimilar(colorTint, colorTintSecondary) {
+                                                        isDualToneActive = false
+                                                        colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
+                                                    }
+                                                    let gen = UIImpactFeedbackGenerator(style: .light)
+                                                    gen.impactOccurred()
+                                                    onEndAdjust?()
                                                 }
-                                                let gen = UIImpactFeedbackGenerator(style: .light)
-                                                gen.impactOccurred()
-                                                onEndAdjust?()
                                             }
                                         }
                                 )
