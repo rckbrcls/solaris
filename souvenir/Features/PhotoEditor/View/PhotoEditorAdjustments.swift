@@ -293,6 +293,7 @@ struct PhotoEditorAdjustments: View {
                     }
                 }
                 .padding(.horizontal)
+                .padding(.vertical, 2)
             }
 
             Group {
