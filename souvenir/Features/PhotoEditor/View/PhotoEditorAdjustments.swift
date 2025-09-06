@@ -364,7 +364,7 @@ private struct InvertToggle: View {
                     gen.impactOccurred()
                     onEnd?()
                 }) {
-                    Text("Desligado")
+                    Text("Off")
                         .font(.callout.bold())
                         .foregroundColor(colorInvert == 0.0 ? .primary : .secondary)
                         .frame(maxWidth: .infinity)
@@ -385,7 +385,7 @@ private struct InvertToggle: View {
                     gen.impactOccurred()
                     onEnd?()
                 }) {
-                    Text("Ligado")
+                    Text("On")
                         .font(.callout.bold())
                         .foregroundColor(colorInvert == 1.0 ? .primary : .secondary)
                         .frame(maxWidth: .infinity)

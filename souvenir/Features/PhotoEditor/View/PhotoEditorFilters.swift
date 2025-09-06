@@ -1169,6 +1169,25 @@ struct PhotoEditorFilters: View {
                 }
             }
         }
+        
+        // Color invert (add this missing filter)
+        if state.colorInvert > 0.0 {
+            let invertFilter = MTIColorInvertFilter()
+            invertFilter.inputImage = mtiImage
+            if let invertedImage = invertFilter.outputImage {
+                if state.colorInvert < 1.0 {
+                    // Blend between original and inverted
+                    let blendFilter = MTIBlendFilter(blendMode: .normal)
+                    blendFilter.inputImage = invertedImage
+                    blendFilter.inputBackgroundImage = mtiImage
+                    blendFilter.intensity = state.colorInvert
+                    mtiImage = blendFilter.outputImage ?? mtiImage
+                } else {
+                    mtiImage = invertedImage
+                }
+            }
+        }
+        
         // Film Grain using MTI + CI noise (linear additive; size via resampling)
         if state.grain > 0.0 {
             let baseK = max(0.0, min(1.0, state.grain * 10.0))
