@@ -293,12 +293,10 @@ private extension PhotoEditorView {
                         .onEnded { _ in
                             let gen = UIImpactFeedbackGenerator(style: .heavy)
                             gen.impactOccurred()
-                            if let _ = viewModel.originalImage {
-                                viewModel.resetPreviewBases()
-                                zoomScale = 1.0
-                                lastZoomScale = 1.0
-                                viewModel.resetAllEditsToClean()
-                            }
+                            viewModel.resetPreviewBases()
+                            zoomScale = 1.0
+                            lastZoomScale = 1.0
+                            viewModel.resetAllEditsToClean()
                         }
                 )
                 Button(action: {
