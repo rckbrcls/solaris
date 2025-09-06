@@ -787,7 +787,7 @@ struct PhotoEditorFilters: View {
                                 if let thumb = thumbs[preset.id] {
                                     Image(uiImage: thumb)
                                         .resizable()
-                                        .aspectRatio(1, contentMode: .fill)
+                                        .aspectRatio(contentMode: .fill)
                                         .frame(width: 56, height: 56)
                                         .clipped()
                                         .cornerRadius(10)
@@ -1242,13 +1242,26 @@ struct PhotoEditorFilters: View {
     }
 
     private func downscale(image: UIImage, maxSide: Int) -> UIImage? {
-        let maxS = CGFloat(maxSide)
+        let targetSize = CGFloat(maxSide)
         let w = image.size.width
         let h = image.size.height
-        let scale = max(w, h) > maxS ? maxS / max(w, h) : 1.0
-        let newSize = CGSize(width: w * scale, height: h * scale)
-        UIGraphicsBeginImageContextWithOptions(newSize, true, 0)
-        image.draw(in: CGRect(origin: .zero, size: newSize))
+        
+        // Calculate scale to fill the square (crop mode)
+        let scale = max(targetSize / w, targetSize / h)
+        let scaledSize = CGSize(width: w * scale, height: h * scale)
+        
+        // Create a square canvas
+        let squareSize = CGSize(width: targetSize, height: targetSize)
+        
+        UIGraphicsBeginImageContextWithOptions(squareSize, true, 0)
+        
+        // Center the scaled image in the square canvas (this will crop excess)
+        let x = (targetSize - scaledSize.width) / 2
+        let y = (targetSize - scaledSize.height) / 2
+        let drawRect = CGRect(x: x, y: y, width: scaledSize.width, height: scaledSize.height)
+        
+        image.draw(in: drawRect)
+        
         let out = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         return out

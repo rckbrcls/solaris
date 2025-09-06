@@ -96,6 +96,8 @@ class PhotoEditorViewModel: ObservableObject {
         print("[CombinedState] Edit saturation: \(editState.saturation)")
         print("[CombinedState] Base colorTint: \(baseFilterState.colorTint)")
         print("[CombinedState] Edit colorTint: \(editState.colorTint)")
+        print("[CombinedState] Base colorInvert: \(baseFilterState.colorInvert)")
+        print("[CombinedState] Edit colorInvert: \(editState.colorInvert)")
         
         // SEMPRE aplica os ajustes do editState sobre o filtro base
         // Não verifica valores padrão, simplesmente combina
@@ -116,6 +118,10 @@ class PhotoEditorViewModel: ObservableObject {
         combined.pixelateAmount = baseFilterState.pixelateAmount + editState.pixelateAmount
         combined.skinTone = baseFilterState.skinTone + editState.skinTone
         
+        // Efeitos especiais: usa o valor do editState se diferente do padrão, senão usa do base
+        combined.colorInvert = editState.colorInvert != 0.0 ? editState.colorInvert : baseFilterState.colorInvert
+        combined.opacity = editState.opacity != 1.0 ? editState.opacity : baseFilterState.opacity
+        
         // Efeitos de cor: se editState tem valores diferentes de padrão, usa eles
         // Senão usa do filtro base
         let defaultTint = SIMD4<Float>(0, 0, 0, 0)
@@ -131,6 +137,7 @@ class PhotoEditorViewModel: ObservableObject {
         print("[CombinedState] Final saturation: \(combined.saturation)")
         print("[CombinedState] Final colorTint: \(combined.colorTint)")
         print("[CombinedState] Final isDualToneActive: \(combined.isDualToneActive)")
+        print("[CombinedState] Final colorInvert: \(combined.colorInvert)")
         
         return combined
     }
@@ -970,11 +977,14 @@ class PhotoEditorViewModel: ObservableObject {
         // Inversão de cores opcional (sem duotone)
         let baseImageForInvert = tintedImageWithSkin
         var finalImage: MTIImage
+        print("[FinalImage] Checking colorInvert: \(state.colorInvert)")
         if state.colorInvert > 0.0 {
+            print("[FinalImage] Applying colorInvert filter")
             let invertFilter = MTIColorInvertFilter()
             invertFilter.inputImage = baseImageForInvert
             guard let invertedImage = invertFilter.outputImage else { return nil }
             if state.colorInvert < 1.0 {
+                print("[FinalImage] Blending inverted image with intensity: \(state.colorInvert)")
                 let blendFilter = MTIBlendFilter(blendMode: .normal)
                 blendFilter.inputImage = invertedImage
                 blendFilter.inputBackgroundImage = baseImageForInvert
@@ -982,9 +992,11 @@ class PhotoEditorViewModel: ObservableObject {
                 guard let blendedImage = blendFilter.outputImage else { return nil }
                 finalImage = blendedImage
             } else {
+                print("[FinalImage] Using fully inverted image")
                 finalImage = invertedImage
             }
         } else {
+            print("[FinalImage] No colorInvert applied")
             finalImage = baseImageForInvert
         }
 
@@ -1373,22 +1385,33 @@ class PhotoEditorViewModel: ObservableObject {
         // Filtro de inversão de cores (quando colorInvert > 0)
         let baseImageForInvert = tintedImageWithSkin
         var finalImage: MTIImage
+        print("[Preview] Checking colorInvert: \(state.colorInvert)")
         if state.colorInvert > 0.0 {
+            print("[Preview] Applying colorInvert filter")
             let invertFilter = MTIColorInvertFilter()
             invertFilter.inputImage = baseImageForInvert
-            guard let invertedImage = invertFilter.outputImage else { return }
+            guard let invertedImage = invertFilter.outputImage else { 
+                print("[Preview] Failed to generate inverted image")
+                return 
+            }
             // Se colorInvert < 1.0, fazemos um blend entre a imagem original e a invertida
             if state.colorInvert < 1.0 {
+                print("[Preview] Blending inverted image with intensity: \(state.colorInvert)")
                 let blendFilter = MTIBlendFilter(blendMode: .normal)
                 blendFilter.inputImage = invertedImage
                 blendFilter.inputBackgroundImage = baseImageForInvert
                 blendFilter.intensity = state.colorInvert
-                guard let blendedImage = blendFilter.outputImage else { return }
+                guard let blendedImage = blendFilter.outputImage else { 
+                    print("[Preview] Failed to blend inverted image")
+                    return 
+                }
                 finalImage = blendedImage
             } else {
+                print("[Preview] Using fully inverted image")
                 finalImage = invertedImage
             }
         } else {
+            print("[Preview] No colorInvert applied")
             finalImage = baseImageForInvert
         }
 

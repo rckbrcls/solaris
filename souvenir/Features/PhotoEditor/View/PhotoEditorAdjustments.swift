@@ -355,40 +355,49 @@ private struct InvertToggle: View {
     var onEnd: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: {
-                if colorInvert != 0.0 {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button(action: {
                     onBegin?()
                     colorInvert = 0.0
                     let gen = UIImpactFeedbackGenerator(style: .medium)
                     gen.impactOccurred()
                     onEnd?()
+                }) {
+                    Text("Desligado")
+                        .font(.callout.bold())
+                        .foregroundColor(colorInvert == 0.0 ? .primary : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(colorInvert == 0.0 ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: colorInvert == 0.0 ? 2 : 1)
+                        )
                 }
-            }) {
-                Text("Off")
-                    .font(.callout.bold())
-                    .frame(maxWidth: .infinity, minHeight: 32)
-                    .padding(.vertical, 2)
-                    .foregroundColor(colorInvert == 0.0 ? Color.white : colorSchemeManager.primaryColor)
-                    .background(colorInvert == 0.0 ? Color.accentColor : colorSchemeManager.primaryColor.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-            Button(action: {
-                if colorInvert != 1.0 {
+                .buttonStyle(.plain)
+                
+                Button(action: {
                     onBegin?()
                     colorInvert = 1.0
                     let gen = UIImpactFeedbackGenerator(style: .medium)
                     gen.impactOccurred()
                     onEnd?()
+                }) {
+                    Text("Ligado")
+                        .font(.callout.bold())
+                        .foregroundColor(colorInvert == 1.0 ? .primary : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(colorInvert == 1.0 ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: colorInvert == 1.0 ? 2 : 1)
+                        )
                 }
-            }) {
-                Text("On")
-                    .font(.callout.bold())
-                    .frame(maxWidth: .infinity, minHeight: 32)
-                    .padding(.vertical, 2)
-                    .foregroundColor(colorInvert == 1.0 ? Color.white : colorSchemeManager.primaryColor)
-                    .background(colorInvert == 1.0 ? Color.accentColor : colorSchemeManager.primaryColor.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                .buttonStyle(.plain)
             }
         }
     }
