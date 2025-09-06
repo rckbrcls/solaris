@@ -714,16 +714,16 @@ struct PhotoEditorFilters: View {
         VStack(spacing: 10) {
             HStack {
                 Button(action: { withAnimation { stage = .groups } }) {
-                    HStack {
+                    HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
+                            .font(.caption)
                             .foregroundColor(.primary)
                         Text("Back")
-                            .font(.body.bold())
+                            .font(.caption2)
                             .foregroundColor(.primary)
-                            .lineLimit(1)
                     }
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
                 }
