@@ -800,7 +800,7 @@ struct PhotoEditorFilters: View {
                             }
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(filterBorderColor(for: preset), lineWidth: 3)
+                                    .strokeBorder(filterBorderColor(for: preset), lineWidth: 3)
                             )
                             .overlay(
                                 Group {
@@ -872,7 +872,7 @@ struct PhotoEditorFilters: View {
                         .frame(width: 62)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 12) // Aumentado para acomodar o stroke de 3pt
             }
         }
     }
