@@ -169,8 +169,8 @@ struct PhotoEditorFilters: View {
                     s.contrast = 1.25
                     s.saturation = 1.40
                     s.vibrance = 0.35
-                    s.colorTint = SIMD4<Float>(0.75, 0.25, 0.85, 1.0)
-                    s.colorTintSecondary = SIMD4<Float>(0.90, 0.50, 0.95, 1.0)
+                    s.colorTint = SIMD4<Float>(0.60, 0.15, 0.90, 1.0)
+                    s.colorTintSecondary = SIMD4<Float>(0.75, 0.30, 1.0, 1.0)
                     s.isDualToneActive = true
                     s.colorTintIntensity = 1.0
                     s.colorTintFactor = 0.70
