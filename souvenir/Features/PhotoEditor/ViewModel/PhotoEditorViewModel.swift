@@ -295,40 +295,228 @@ class PhotoEditorViewModel: ObservableObject {
     func clearLastUndoMessage() { lastUndoMessage = nil }
     
     // MARK: - Filter System
-    func applyBaseFilter(_ filterState: PhotoEditState) {
-        // Tap simples: aplica filtro como base, mantém sliders inalterados
-        print("[Filter] Applying base filter - INPUT colorTint: \(filterState.colorTint), saturation: \(filterState.saturation)")
-        print("[Filter] Applying base filter - INPUT contrast: \(filterState.contrast), isDualToneActive: \(filterState.isDualToneActive)")
-        
-        // Registra ponto de undo antes de aplicar o filtro
-        registerUndoPoint()
-        
-        baseFilterState = filterState
-        
-        print("[Filter] Base filter APPLIED - RESULT saturation: \(baseFilterState.saturation)")
-        print("[Filter] Base filter APPLIED - RESULT colorTint: \(baseFilterState.colorTint)")
-        print("[Filter] Base filter APPLIED - RESULT isDualToneActive: \(baseFilterState.isDualToneActive)")
+    
+    // MARK: - Filter Type Detection
+    enum FilterApplicationType {
+        case base        // Filtro aplicado via TAP (baseFilterState)
+        case sliders     // Filtro aplicado via LONG PRESS (editState)
+        case none        // Filtro não aplicado
     }
     
-    func applyCompleteFilter(_ filterState: PhotoEditState) {
-        // Long press: aplica filtro completo, zera base e altera sliders
-        print("[Filter] Applying complete filter")
-        
-        // Registra ponto de undo antes de aplicar o filtro completo
-        registerUndoPoint()
-        
-        baseFilterState = PhotoEditState() // Zera filtro base
-        editState = filterState  // Aplica tudo nos sliders
+    /// Verifica como um filtro específico está aplicado atualmente
+    func getFilterApplicationType(_ filterState: PhotoEditState) -> FilterApplicationType {
+        if isStatesSimilar(baseFilterState, filterState) {
+            return .base
+        }
+        if isStatesSimilar(editState, filterState) {
+            return .sliders
+        }
+        return .none
     }
+    
+    /// Verifica se um filtro específico já está aplicado (em qualquer forma)
+    func isFilterApplied(_ filterState: PhotoEditState) -> Bool {
+        return getFilterApplicationType(filterState) != .none
+    }
+    
+    /// Verifica se um filtro foi aplicado via long press (nos sliders)
+    func isFilterAppliedToSliders(_ filterState: PhotoEditState) -> Bool {
+        return isStatesSimilar(editState, filterState)
+    }
+    
+    /// Verifica se um filtro foi aplicado via tap simples (base filter)
+    func isFilterAppliedAsBase(_ filterState: PhotoEditState) -> Bool {
+        return isStatesSimilar(baseFilterState, filterState)
+    }
+    
+    /// Verifica se há uma combinação ativa de filtros (long press + tap)
+    var hasFilterCombination: Bool {
+        let defaultState = PhotoEditState()
+        let hasSliderFilter = !isStatesSimilar(editState, defaultState)
+        let hasBaseFilter = !isStatesSimilar(baseFilterState, defaultState)
+        return hasSliderFilter && hasBaseFilter
+    }
+    
+    /// Retorna o filtro aplicado nos sliders (via long press) se houver
+    func getSliderFilter() -> PhotoEditState? {
+        let defaultState = PhotoEditState()
+        if !isStatesSimilar(editState, defaultState) {
+            return editState
+        }
+        return nil
+    }
+    
+    /// Retorna o filtro aplicado como base (via tap) se houver
+    func getBaseFilter() -> PhotoEditState? {
+        let defaultState = PhotoEditState()
+        if !isStatesSimilar(baseFilterState, defaultState) {
+            return baseFilterState
+        }
+        return nil
+    }
+    
+    /// Verifica se ambos os filtros (base e slider) correspondem aos estados fornecidos
+    func hasSpecificFilterCombination(sliderFilter: PhotoEditState, baseFilter: PhotoEditState) -> Bool {
+        return isStatesSimilar(editState, sliderFilter) && isStatesSimilar(baseFilterState, baseFilter)
+    }
+    
+    /// Compara dois PhotoEditState considerando tolerâncias para valores Float
+    private func isStatesSimilar(_ state1: PhotoEditState, _ state2: PhotoEditState) -> Bool {
+        let tolerance: Float = 0.001
+        
+        func isFloatSimilar(_ a: Float, _ b: Float) -> Bool {
+            return abs(a - b) < tolerance
+        }
+        
+        func isColorSimilar(_ c1: SIMD4<Float>, _ c2: SIMD4<Float>) -> Bool {
+            return isFloatSimilar(c1.x, c2.x) && 
+                   isFloatSimilar(c1.y, c2.y) && 
+                   isFloatSimilar(c1.z, c2.z) && 
+                   isFloatSimilar(c1.w, c2.w)
+        }
+        
+        return isFloatSimilar(state1.contrast, state2.contrast) &&
+               isFloatSimilar(state1.brightness, state2.brightness) &&
+               isFloatSimilar(state1.exposure, state2.exposure) &&
+               isFloatSimilar(state1.saturation, state2.saturation) &&
+               isFloatSimilar(state1.vibrance, state2.vibrance) &&
+               isFloatSimilar(state1.opacity, state2.opacity) &&
+               isFloatSimilar(state1.fade, state2.fade) &&
+               isFloatSimilar(state1.vignette, state2.vignette) &&
+               isFloatSimilar(state1.colorInvert, state2.colorInvert) &&
+               isFloatSimilar(state1.pixelateAmount, state2.pixelateAmount) &&
+               isFloatSimilar(state1.sharpen, state2.sharpen) &&
+               isFloatSimilar(state1.clarity, state2.clarity) &&
+               isFloatSimilar(state1.grain, state2.grain) &&
+               isFloatSimilar(state1.grainSize, state2.grainSize) &&
+               isColorSimilar(state1.colorTint, state2.colorTint) &&
+               isColorSimilar(state1.colorTintSecondary, state2.colorTintSecondary) &&
+               isFloatSimilar(state1.colorTintIntensity, state2.colorTintIntensity) &&
+               isFloatSimilar(state1.colorTintFactor, state2.colorTintFactor) &&
+               state1.isDualToneActive == state2.isDualToneActive &&
+               isFloatSimilar(state1.skinTone, state2.skinTone)
+    }
+    
+    /// Retorna o filtro atualmente aplicado (para UI mostrar seleção)
+    func getCurrentAppliedFilter() -> PhotoEditState? {
+        let defaultState = PhotoEditState()
+        
+        // Se há filtro base aplicado, retorna ele
+        if !isStatesSimilar(baseFilterState, defaultState) {
+            return baseFilterState
+        }
+        
+        // Se não há filtro base mas há editState modificado, retorna editState
+        if !isStatesSimilar(editState, defaultState) {
+            return editState
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Filter Application Methods
+    
+    /// Aplica filtro via TAP SIMPLES (baseFilterState)
+    /// Comportamento: Mantém sliders inalterados, aplica como base visual
+    func applyBaseFilter(_ filterState: PhotoEditState) {
+        let defaultState = PhotoEditState()
+        
+        print("[Filter] TAP: Applying base filter")
+        print("[Filter] TAP: Current base similar to target? \(isStatesSimilar(baseFilterState, filterState))")
+        print("[Filter] TAP: Current edit state: \(editState)")
+        
+        // Se o mesmo filtro já está aplicado como base, remove
+        if isStatesSimilar(baseFilterState, filterState) {
+            print("[Filter] TAP: Same base filter detected, removing")
+            registerUndoPoint()
+            baseFilterState = defaultState
+            return
+        }
+        
+        // Aplica novo filtro como base (permite combinação com slider existente)
+        print("[Filter] TAP: Applying new base filter (may combine with existing slider filter)")
+        registerUndoPoint()
+        baseFilterState = filterState
+        
+        print("[Filter] TAP: Base filter applied - saturation: \(baseFilterState.saturation)")
+        print("[Filter] TAP: Current edit state preserved: \(editState)")
+    }
+    
+    /// Aplica filtro via LONG PRESS (editState)  
+    /// Comportamento: Altera sliders, pode preservar ou substituir baseFilterState
+    func applySliderFilter(_ filterState: PhotoEditState) {
+        let defaultState = PhotoEditState()
+        
+        print("[Filter] LONG PRESS: Applying slider filter")
+        print("[Filter] LONG PRESS: Current edit similar to target? \(isStatesSimilar(editState, filterState))")
+        print("[Filter] LONG PRESS: Current base state: \(baseFilterState)")
+        
+        // Se o mesmo filtro já está aplicado nos sliders, remove apenas ele
+        if isStatesSimilar(editState, filterState) {
+            print("[Filter] LONG PRESS: Same slider filter detected, removing")
+            registerUndoPoint()
+            editState = defaultState
+            // Preserva baseFilterState para permitir combinações
+            return
+        }
+        
+        // Aplica novo filtro nos sliders (permite combinação com base existente)
+        print("[Filter] LONG PRESS: Applying new slider filter (may combine with existing base filter)")
+        registerUndoPoint()
+        editState = filterState
+        
+        print("[Filter] LONG PRESS: Slider filter applied - saturation: \(editState.saturation)")
+        print("[Filter] LONG PRESS: Current base state preserved: \(baseFilterState)")
+    }
+    
+    /// Remove filtro específico baseado no tipo de aplicação
+    func removeFilter(_ filterState: PhotoEditState) {
+        let applicationType = getFilterApplicationType(filterState)
+        
+        switch applicationType {
+        case .base:
+            print("[Filter] Removing base filter")
+            registerUndoPoint()
+            baseFilterState = PhotoEditState()
+            
+        case .sliders:
+            print("[Filter] Removing slider filter")
+            registerUndoPoint()
+            editState = PhotoEditState()
+            
+        case .none:
+            print("[Filter] Filter not currently applied, nothing to remove")
+        }
+    }
+    
+    // MARK: - Filter Management Utilities
     
     func clearBaseFilter() {
         print("[Filter] Clearing base filter")
-        
-        // Registra ponto de undo antes de limpar o filtro base
         registerUndoPoint()
-        
         baseFilterState = PhotoEditState()
     }
+    
+    func clearSliderFilter() {
+        print("[Filter] Clearing slider filter")
+        registerUndoPoint()
+        editState = PhotoEditState()
+    }
+    
+    func clearAllFilters() {
+        print("[Filter] Clearing all filters and adjustments")
+        registerUndoPoint()
+        baseFilterState = PhotoEditState()
+        editState = PhotoEditState()
+    }
+    
+    /// Verifica se algum filtro está atualmente aplicado
+    var hasAnyFilterApplied: Bool {
+        let defaultState = PhotoEditState()
+        return !isStatesSimilar(baseFilterState, defaultState) || !isStatesSimilar(editState, defaultState)
+    }
+    
+    // MARK: - Filter State Comparison Utilities
 
     // Load persistent history when opening editor
     func loadPersistentUndoHistory(_ history: [PhotoEditState]) {

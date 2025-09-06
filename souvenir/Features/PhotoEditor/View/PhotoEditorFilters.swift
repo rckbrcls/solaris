@@ -33,6 +33,12 @@ struct PhotoEditorFilters: View {
     var baseImage: UIImage?
     var applyBaseFilter: ((PhotoEditState) -> Void)? = nil
     var applyCompleteFilter: ((PhotoEditState) -> Void)? = nil
+    var isFilterApplied: ((PhotoEditState) -> Bool)? = nil // Nova função para verificar se filtro está aplicado
+    var isFilterAppliedToSliders: ((PhotoEditState) -> Bool)? = nil // Nova função para verificar se foi aplicado via long press
+    var isFilterAppliedAsBase: ((PhotoEditState) -> Bool)? = nil // Nova função para verificar se foi aplicado via tap
+    var hasFilterCombination: (() -> Bool)? = nil // Nova função para verificar se há combinação de filtros
+    var getSliderFilter: (() -> PhotoEditState?)? = nil // Obtém filtro dos sliders
+    var getBaseFilter: (() -> PhotoEditState?)? = nil // Obtém filtro base
 
     @State private var selectedGroup: FilterGroup = .all
     @State private var stage: Stage = .groups
@@ -661,8 +667,11 @@ struct PhotoEditorFilters: View {
     }
 
     private func applyPreset(_ preset: FilterPreset) {
-        // Long press: aplica filtro completo (altera sliders)
-        registerUndo?()
+        // Long press: aplica filtro nos sliders (editState)
+        print("[Filter UI] Long press on: \(preset.name)")
+        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+        impactFeedback.impactOccurred()
+        
         withAnimation(.easeOut(duration: 0.18)) {
             selectedPresetID = preset.id
             applyCompleteFilter?(preset.state)
@@ -670,11 +679,43 @@ struct PhotoEditorFilters: View {
     }
     
     private func applyPresetVisualOnly(_ preset: FilterPreset) {
-        // Tap simples: aplica filtro como base, mantém sliders inalterados
+        // Tap simples: aplica filtro como base visual (baseFilterState)
+        print("[Filter UI] Tap on: \(preset.name)")
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
         withAnimation(.easeOut(duration: 0.18)) {
             selectedPresetID = preset.id
             applyBaseFilter?(preset.state)
         }
+    }
+    
+    /// Determina a cor da borda do filtro baseada no tipo de aplicação
+    private func filterBorderColor(for preset: FilterPreset) -> Color {
+        let isAppliedToSliders = isFilterAppliedToSliders?(preset.state) ?? false
+        let isAppliedAsBase = isFilterAppliedAsBase?(preset.state) ?? false
+        
+        // Prioriza slider filter (verde esmeralda)
+        if isAppliedToSliders {
+            return ColorSchemeManager.emerald
+        }
+        
+        // Depois base filter (azul accent)
+        if isAppliedAsBase {
+            return Color.accentColor
+        }
+        
+        return Color.clear
+    }
+    
+    /// Determina se deve mostrar indicador circular verde para filtros aplicados via long press
+    private func shouldShowSliderIndicator(for preset: FilterPreset) -> Bool {
+        return isFilterAppliedToSliders?(preset.state) ?? false
+    }
+    
+    /// Determina se deve mostrar indicador circular azul para filtros aplicados via tap
+    private func shouldShowBaseIndicator(for preset: FilterPreset) -> Bool {
+        return isFilterAppliedAsBase?(preset.state) ?? false
     }
 
     // MARK: - Views
@@ -759,7 +800,7 @@ struct PhotoEditorFilters: View {
                             }
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(selectedPresetID == preset.id ? Color.accentColor : Color.clear, lineWidth: 3)
+                                    .stroke(filterBorderColor(for: preset), lineWidth: 3)
                             )
                             .overlay(
                                 Group {
@@ -774,6 +815,41 @@ struct PhotoEditorFilters: View {
                                                 .padding(4)
                                             Spacer()
                                         }
+                                    }
+                                    
+                                    // Indicadores para filtros aplicados
+                                    VStack {
+                                        HStack {
+                                            // Indicador para filtro base (tap simples) - círculo azul
+                                            if shouldShowBaseIndicator(for: preset) {
+                                                Circle()
+                                                    .fill(Color.accentColor)
+                                                    .frame(width: 10, height: 10)
+                                                    .overlay(
+                                                        Circle()
+                                                            .fill(Color.white)
+                                                            .frame(width: 3, height: 3)
+                                                    )
+                                                    .padding(4)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            // Indicador para filtro nos sliders (long press) - círculo verde esmeralda
+                                            if shouldShowSliderIndicator(for: preset) {
+                                                Circle()
+                                                    .fill(ColorSchemeManager.emerald)
+                                                    .frame(width: 10, height: 10)
+                                                    .overlay(
+                                                        Circle()
+                                                            .fill(Color.white)
+                                                            .frame(width: 3, height: 3)
+                                                    )
+                                                    .padding(4)
+                                            }
+                                        }
+                                        
+                                        Spacer()
                                     }
                                 }, alignment: .topLeading
                             )

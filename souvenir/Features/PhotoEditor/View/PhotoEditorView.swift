@@ -181,7 +181,13 @@ private extension PhotoEditorView {
                 registerUndo: { viewModel.registerUndoPoint() },
                 baseImage: viewModel.previewThumbnailBase ?? viewModel.originalImage,
                 applyBaseFilter: { filterState in viewModel.applyBaseFilter(filterState) },
-                applyCompleteFilter: { filterState in viewModel.applyCompleteFilter(filterState) }
+                applyCompleteFilter: { filterState in viewModel.applySliderFilter(filterState) },
+                isFilterApplied: { filterState in viewModel.isFilterApplied(filterState) },
+                isFilterAppliedToSliders: { filterState in viewModel.isFilterAppliedToSliders(filterState) },
+                isFilterAppliedAsBase: { filterState in viewModel.isFilterAppliedAsBase(filterState) },
+                hasFilterCombination: { viewModel.hasFilterCombination },
+                getSliderFilter: { viewModel.getSliderFilter() },
+                getBaseFilter: { viewModel.getBaseFilter() }
             )
         } else if selectedCategory == "edit" {
             PhotoEditorAdjustments(
