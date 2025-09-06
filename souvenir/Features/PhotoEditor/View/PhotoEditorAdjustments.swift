@@ -163,7 +163,12 @@ struct RulerSlider: View {
             .frame(height: sliderHeight)
         }
         .frame(height: sliderHeight)
-        .boxBlankStyle(cornerRadius: 12, padding: 6)
+        .padding(6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
@@ -693,7 +698,12 @@ private struct ColorTintControls: View {
                     .contentShape(Rectangle())
                     .zIndex(1)
                 }
-                .boxBlankStyle(cornerRadius: 12, padding: 4)
+                .padding(4)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
                 .zIndex(1)
                 Button(action: {
                     if colorTint.w != 0.0 || isDualToneActive {
@@ -751,15 +761,24 @@ private struct AdjustmentIconButton: View {
                 Image(systemName: icon)
                     .frame(width: 16, height: 16)
                     .foregroundColor(iconColor)
+                    .scaleEffect((isSelected || isActive) ? 1.1 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected || isActive)
             }
             .padding(8)
-            .boxBlankStyle(cornerRadius: 8, padding: 10)
-            .background(isActive ? colorSchemeManager.primaryColor.opacity(0.10) : Color.clear)
+            .frame(width: 50, height: 50)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
+                    .stroke(
+                        (isSelected || isActive)
+                        ? colorSchemeManager.primaryColor.opacity(0.6)
+                        : Color.primary.opacity(0.08),
+                        lineWidth: (isSelected || isActive) ? 2 : 1
+                    )
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected || isActive)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .scaleEffect((isSelected || isActive) ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected || isActive)
         }
         .buttonStyle(.plain)
     }
