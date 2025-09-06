@@ -830,7 +830,7 @@ struct PhotoEditorFilters: View {
                                                             .fill(Color.white)
                                                             .frame(width: 3, height: 3)
                                                     )
-                                                    .padding(4)
+                                                    .padding(6)
                                             }
                                             
                                             Spacer()
@@ -845,7 +845,7 @@ struct PhotoEditorFilters: View {
                                                             .fill(Color.white)
                                                             .frame(width: 3, height: 3)
                                                     )
-                                                    .padding(4)
+                                                    .padding(6)
                                             }
                                         }
                                         
