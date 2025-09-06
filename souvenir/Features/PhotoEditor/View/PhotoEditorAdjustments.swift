@@ -475,24 +475,46 @@ private struct ColorTintControls: View {
                                 .frame(width: 44, height: 44)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(
+                                        .strokeBorder(
                                             isSelectedPreset ? Color.accentColor :
-                                            isSelectedSecondary ? Color.orange : Color.clear,
+                                            isSelectedSecondary ? ColorSchemeManager.emerald : Color.clear,
                                             lineWidth: 3
                                         )
-                                        .padding(0.5)
-                                        .allowsHitTesting(false)
                                 )
                                 .overlay(
-                                    // Indicador visual para dual tone
-                                    Group {
-                                        if isSelectedSecondary {
-                                            Image(systemName: "2.circle.fill")
-                                                .foregroundColor(.white)
-                                                .background(Circle().fill(Color.orange))
-                                                .font(.caption2)
-                                                .offset(x: 12, y: -12)
+                                    // Indicadores de feedback visual (mesmo estilo dos filtros)
+                                    VStack {
+                                        HStack {
+                                            // Indicador para cor primária (tap) - círculo azul
+                                            if isSelectedPreset {
+                                                Circle()
+                                                    .fill(Color.accentColor)
+                                                    .frame(width: 10, height: 10)
+                                                    .overlay(
+                                                        Circle()
+                                                            .fill(Color.white)
+                                                            .frame(width: 3, height: 3)
+                                                    )
+                                                    .padding(6)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            // Indicador para cor secundária (long press) - círculo verde esmeralda
+                                            if isSelectedSecondary {
+                                                Circle()
+                                                    .fill(ColorSchemeManager.emerald)
+                                                    .frame(width: 10, height: 10)
+                                                    .overlay(
+                                                        Circle()
+                                                            .fill(Color.white)
+                                                            .frame(width: 3, height: 3)
+                                                    )
+                                                    .padding(6)
+                                            }
                                         }
+                                        
+                                        Spacer()
                                     }
                                 )
                                 .contentShape(RoundedRectangle(cornerRadius: 10))
@@ -588,23 +610,42 @@ private struct ColorTintControls: View {
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.accentColor.opacity((colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) })) ? 1 : 0), lineWidth: 3)
-                                    .allowsHitTesting(false)
+                                    .strokeBorder(Color.accentColor.opacity((colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) })) ? 1 : 0), lineWidth: 3)
                             )
                             .overlay(
-                                // Indicador para dual tone no ColorPicker
-                                Group {
-                                    if isDualToneActive {
-                                        HStack(spacing: 2) {
+                                // Indicadores de feedback visual no ColorPicker (mesmo estilo dos filtros)
+                                VStack {
+                                    HStack {
+                                        // Indicador para cor primária quando usar ColorPicker customizado
+                                        if colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) }) {
                                             Circle()
-                                                .fill(Color(red: Double(colorTint.x), green: Double(colorTint.y), blue: Double(colorTint.z)))
-                                                .frame(width: 8, height: 8)
-                                            Circle()
-                                                .fill(Color(red: Double(colorTintSecondary.x), green: Double(colorTintSecondary.y), blue: Double(colorTintSecondary.z)))
-                                                .frame(width: 8, height: 8)
+                                                .fill(Color.accentColor)
+                                                .frame(width: 10, height: 10)
+                                                .overlay(
+                                                    Circle()
+                                                        .fill(Color.white)
+                                                        .frame(width: 3, height: 3)
+                                                )
+                                                .padding(6)
                                         }
-                                        .offset(y: 12)
+                                        
+                                        Spacer()
+                                        
+                                        // Indicador para dual tone ativo
+                                        if isDualToneActive {
+                                            Circle()
+                                                .fill(ColorSchemeManager.emerald)
+                                                .frame(width: 10, height: 10)
+                                                .overlay(
+                                                    Circle()
+                                                        .fill(Color.white)
+                                                        .frame(width: 3, height: 3)
+                                                )
+                                                .padding(6)
+                                        }
                                     }
+                                    
+                                    Spacer()
                                 }
                             )
                         }
