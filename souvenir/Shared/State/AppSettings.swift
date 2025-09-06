@@ -25,6 +25,7 @@ final class AppSettings: ObservableObject {
     @Published var exportColorSpace: ExportColorSpacePreference = .auto { didSet { persist() } }
     @Published var historyLimit: Int = 100 { didSet { persist() } }
     @Published var hapticsEnabled: Bool = true { didSet { persist() } }
+    @Published var mirrorFrontCamera: Bool = false { didSet { persist() } }
 
     private let key = "AppSettings_v1"
 
@@ -60,6 +61,7 @@ final class AppSettings: ObservableObject {
         let exportColorSpace: ExportColorSpacePreference
         let historyLimit: Int
         let hapticsEnabled: Bool
+        let mirrorFrontCamera: Bool
     }
 
     private func persist() {
@@ -70,7 +72,8 @@ final class AppSettings: ObservableObject {
             preserveMetadata: preserveMetadata,
             exportColorSpace: exportColorSpace,
             historyLimit: historyLimit,
-            hapticsEnabled: hapticsEnabled
+            hapticsEnabled: hapticsEnabled,
+            mirrorFrontCamera: mirrorFrontCamera
         )
         if let data = try? JSONEncoder().encode(payload) {
             UserDefaults.standard.set(data, forKey: key)
@@ -88,6 +91,7 @@ final class AppSettings: ObservableObject {
             exportColorSpace = stored2.exportColorSpace
             historyLimit = stored2.historyLimit
             hapticsEnabled = stored2.hapticsEnabled
+            mirrorFrontCamera = stored2.mirrorFrontCamera
             return
         }
         if let stored1 = try? dec.decode(StoredV1.self, from: data) {
@@ -98,6 +102,8 @@ final class AppSettings: ObservableObject {
             preserveMetadata = true
             exportColorSpace = .auto
             historyLimit = 100
+            hapticsEnabled = true
+            mirrorFrontCamera = false
             hapticsEnabled = true
         }
     }

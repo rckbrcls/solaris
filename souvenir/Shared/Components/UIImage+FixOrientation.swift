@@ -94,4 +94,37 @@ extension UIImage {
         // Preserva a escala original da imagem
         return UIImage(cgImage: newCGImage, scale: self.scale, orientation: .up)
     }
+    
+    func horizontallyMirrored() -> UIImage {
+        // Cria uma imagem espelhada horizontalmente
+        guard let cgImage = self.cgImage else { return self }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else { 
+            return self
+        }
+        
+        // Aplica transformação de espelhamento horizontal
+        context.translateBy(x: CGFloat(width), y: 0)
+        context.scaleBy(x: -1.0, y: 1.0)
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        
+        guard let newCGImage = context.makeImage() else { 
+            return self
+        }
+        
+        return UIImage(cgImage: newCGImage, scale: self.scale, orientation: .up)
+    }
 }

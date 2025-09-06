@@ -12,6 +12,7 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     var isFlashOn: Binding<Bool> = .constant(false)
     var zoomFactor: Binding<CGFloat> = .constant(1.0)
     var currentCameraPosition: AVCaptureDevice.Position = .back
+    var isFrontCamera: Binding<Bool> = .constant(false)
     var flashOverlayView: UIView?
     // Focus state and UI
     private var isFocusLocked: Bool = false
@@ -240,6 +241,11 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
                 cs.addInput(currentInput)
             }
             cs.commitConfiguration()
+            
+            // Atualiza o binding para indicar se é câmera frontal
+            DispatchQueue.main.async {
+                self.isFrontCamera.wrappedValue = (self.currentCameraPosition == .front)
+            }
             self.configureSubjectAreaMonitoring(enabled: true)
         }
     }

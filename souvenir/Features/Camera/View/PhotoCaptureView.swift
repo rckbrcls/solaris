@@ -35,6 +35,7 @@ struct PhotoCaptureView: View {
     @State private var isFlashOn: Bool = false
     @State private var isGridOn: Bool = false
     @State private var zoomFactor: CGFloat = 1.0
+    @State private var isFrontCamera: Bool = false
     // Aspect ratio selection
     enum AspectOption: String, CaseIterable, Identifiable {
         case square = "1:1"
@@ -72,7 +73,7 @@ struct PhotoCaptureView: View {
                 ZStack {
                     let previewW = UIScreen.main.bounds.width
                     let previewH: CGFloat = previewW * (selectedAspect.height / max(1, selectedAspect.width))
-                    CameraPreview(capturedImage: $capturedImage, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor)
+                    CameraPreview(capturedImage: $capturedImage, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor, isFrontCamera: $isFrontCamera)
                         .allowsHitTesting(!isDraggingDismiss)
                         .frame(width: previewW, height: previewH)
                         .clipped()
@@ -197,8 +198,14 @@ struct PhotoCaptureView: View {
             .navigationBarBackButtonHidden(true)
             .onChange(of: capturedImage) { newImage in
                 if let image = newImage {
-                    let fixed = image.fixOrientation()
-                    let cropped = cropToSelectedAspect(fixed, aspect: selectedAspect)
+                    var processedImage = image.fixOrientation()
+                    
+                    // Aplica espelhamento se for câmera frontal e a configuração estiver habilitada
+                    if isFrontCamera && AppSettings.shared.mirrorFrontCamera {
+                        processedImage = processedImage.horizontallyMirrored()
+                    }
+                    
+                    let cropped = cropToSelectedAspect(processedImage, aspect: selectedAspect)
                     onPhotoCaptured(cropped)
                 }
             }

@@ -53,6 +53,9 @@ struct SettingsView: View {
                 Section(header: Text("Feedback")) {
                     Toggle("Haptics", isOn: $appSettings.hapticsEnabled)
                 }
+                Section(header: Text("Câmera"), footer: Text("Quando desabilitado, as fotos da câmera frontal ficam como aparentam no preview (espelhadas). Quando habilitado, são corrigidas como outras pessoas te veem.")) {
+                    Toggle("Espelhar câmera frontal", isOn: $appSettings.mirrorFrontCamera)
+                }
             }
             .navigationTitle("Configurações")
             .toolbar {

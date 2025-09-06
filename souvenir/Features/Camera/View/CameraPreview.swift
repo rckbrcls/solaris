@@ -6,6 +6,7 @@ struct CameraPreview: UIViewControllerRepresentable {
     @Binding var isPhotoTaken: Bool
     @Binding var isFlashOn: Bool
     @Binding var zoomFactor: CGFloat
+    @Binding var isFrontCamera: Bool
 
     func makeUIViewController(context: Context) -> CameraViewController {
         let controller = CameraViewController()
@@ -13,6 +14,7 @@ struct CameraPreview: UIViewControllerRepresentable {
         controller.isPhotoTaken = $isPhotoTaken
         controller.isFlashOn = $isFlashOn
         controller.zoomFactor = $zoomFactor
+        controller.isFrontCamera = $isFrontCamera
         return controller
     }
 
