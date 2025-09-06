@@ -18,6 +18,7 @@ extension FilterPreset {
 }
 
 enum FilterGroup: String, CaseIterable {
+    case all = "All"
     case classics = "Classics"
     case cinema = "Cinema"
     case vintage = "Vintage"
@@ -31,7 +32,7 @@ struct PhotoEditorFilters: View {
     var registerUndo: (() -> Void)? = nil
     var baseImage: UIImage?
 
-    @State private var selectedGroup: FilterGroup = .classics
+    @State private var selectedGroup: FilterGroup = .all
     @State private var stage: Stage = .groups
     @State private var selectedPresetID: String? = nil
     @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
@@ -54,7 +55,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "bw",
                 name: "B&W",
-                subtitle: "Monocromático",
+                subtitle: "Monochrome",
                 swatch: [.black, .white],
                 state: {
                     var s = PhotoEditState()
@@ -67,7 +68,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "vivid",
                 name: "Vivid",
-                subtitle: "Intenso",
+                subtitle: "Intense",
                 swatch: [.orange, .pink],
                 state: {
                     var s = PhotoEditState()
@@ -80,7 +81,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "cool",
                 name: "Cool",
-                subtitle: "Frio",
+                subtitle: "Cold tones",
                 swatch: [.blue, .mint],
                 state: {
                     var s = PhotoEditState()
@@ -94,7 +95,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "warm",
                 name: "Warm",
-                subtitle: "Quente",
+                subtitle: "Warm tones",
                 swatch: [.yellow, .orange],
                 state: {
                     var s = PhotoEditState()
@@ -109,7 +110,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "fade",
                 name: "Fade",
-                subtitle: "Suave",
+                subtitle: "Soft look",
                 swatch: [.gray, .white],
                 state: {
                     var s = PhotoEditState()
@@ -131,12 +132,16 @@ struct PhotoEditorFilters: View {
                 swatch: [.blue, .indigo],
                 state: {
                     var s = PhotoEditState()
-                    s.saturation = 1.15
-                    s.vibrance = 0.35
-                    s.contrast = 1.08
-                    s.colorTint = SIMD4<Float>(0.50, 0.72, 1.0, 1.0)
+                    s.saturation = 1.35
+                    s.vibrance = 0.45
+                    s.contrast = 1.25
+                    s.colorTint = SIMD4<Float>(0.20, 0.50, 1.0, 1.0)
+                    s.colorTintSecondary = SIMD4<Float>(0.10, 0.30, 0.85, 1.0)
+                    s.isDualToneActive = true
                     s.colorTintIntensity = 0.95
-                    s.colorTintFactor = 0.40
+                    s.colorTintFactor = 0.50
+                    s.grain = 0.025
+                    s.clarity = 0.20
                     return s
                 }()
             ),
@@ -147,29 +152,38 @@ struct PhotoEditorFilters: View {
                 swatch: [.red, .orange],
                 state: {
                     var s = PhotoEditState()
-                    s.contrast = 1.20
-                    s.saturation = 1.30
-                    s.vibrance = 0.35
-                    s.exposure = 0.05
-                    s.colorTint = SIMD4<Float>(1.0, 0.55, 0.55, 1.0)
+                    s.contrast = 1.35
+                    s.saturation = 1.45
+                    s.vibrance = 0.40
+                    s.exposure = 0.08
+                    s.colorTint = SIMD4<Float>(1.0, 0.15, 0.15, 1.0)
+                    s.colorTintSecondary = SIMD4<Float>(0.85, 0.25, 0.25, 1.0)
+                    s.isDualToneActive = true
                     s.colorTintIntensity = 0.95
-                    s.colorTintFactor = 0.38
+                    s.colorTintFactor = 0.45
+                    s.grain = 0.03
+                    s.sharpen = 0.15
                     return s
                 }()
             ),
             FilterPreset(
                 id: "dost_lilii",
                 name: "LILII",
-                subtitle: "Soft red",
-                swatch: [.pink, .red.opacity(0.7)],
+                subtitle: "Purple magic",
+                swatch: [.purple, .pink],
                 state: {
                     var s = PhotoEditState()
-                    s.contrast = 1.12
-                    s.saturation = 1.25
-                    s.vibrance = 0.30
-                    s.colorTint = SIMD4<Float>(1.0, 0.78, 0.86, 1.0)
-                    s.colorTintIntensity = 0.95
-                    s.colorTintFactor = 0.32
+                    s.contrast = 1.25
+                    s.saturation = 1.40
+                    s.vibrance = 0.35
+                    s.colorTint = SIMD4<Float>(0.75, 0.25, 0.85, 1.0)
+                    s.colorTintSecondary = SIMD4<Float>(0.90, 0.50, 0.95, 1.0)
+                    s.isDualToneActive = true
+                    s.colorTintIntensity = 0.90
+                    s.colorTintFactor = 0.40
+                    s.grain = 0.02
+                    s.brightness = 0.05
+                    s.fade = 0.10
                     return s
                 }()
             )
@@ -181,22 +195,22 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "cinema_noir",
                 name: "Film Noir",
-                subtitle: "Drama clássico",
+                subtitle: "Classic drama",
                 swatch: [.black, .gray],
                 state: {
                     var s = PhotoEditState()
                     s.saturation = 0.0
                     s.contrast = 1.35
-                    s.vignette = 0.45
-                    s.clarity = 0.25
+                    s.clarity = 0.40
                     s.grain = 0.03
+                    s.brightness = -0.08
                     return s
                 }()
             ),
             FilterPreset(
                 id: "cinema_teal_orange",
                 name: "Blockbuster",
-                subtitle: "Laranja & Azul",
+                subtitle: "Orange & Blue",
                 swatch: [.orange, .cyan],
                 state: {
                     var s = PhotoEditState()
@@ -213,7 +227,7 @@ struct PhotoEditorFilters: View {
             ),
             FilterPreset(
                 id: "cinema_bleach_bypass",
-                name: "Bleach Bypass",
+                name: "Bleach",
                 subtitle: "Silver retention",
                 swatch: [.gray, .yellow.opacity(0.7)],
                 state: {
@@ -230,7 +244,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "cinema_sepia_tone",
                 name: "Sepia Tone",
-                subtitle: "Western clássico",
+                subtitle: "Classic western",
                 swatch: [.brown, .yellow.opacity(0.8)],
                 state: {
                     var s = PhotoEditState()
@@ -239,15 +253,29 @@ struct PhotoEditorFilters: View {
                     s.colorTintIntensity = 0.90
                     s.colorTintFactor = 0.55
                     s.contrast = 1.15
-                    s.vignette = 0.25
                     s.grain = 0.025
+                    s.exposure = 0.05
+                    return s
+                }()
+            ),
+            FilterPreset(
+                id: "cinema_negative",
+                name: "Negative",
+                subtitle: "Film negative",
+                swatch: [.black, .white],
+                state: {
+                    var s = PhotoEditState()
+                    s.colorInvert = 1.0
+                    s.contrast = 1.10
+                    s.brightness = 0.10
+                    s.saturation = 0.85
                     return s
                 }()
             ),
             FilterPreset(
                 id: "cinema_desaturated",
                 name: "Desaturated",
-                subtitle: "Drama moderno",
+                subtitle: "Modern drama",
                 swatch: [.gray.opacity(0.7), .blue.opacity(0.5)],
                 state: {
                     var s = PhotoEditState()
@@ -267,7 +295,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "vintage_kodachrome",
                 name: "Kodachrome",
-                subtitle: "Cores vibrantes",
+                subtitle: "Vibrant colors",
                 swatch: [.red, .yellow],
                 state: {
                     var s = PhotoEditState()
@@ -278,14 +306,31 @@ struct PhotoEditorFilters: View {
                     s.colorTintIntensity = 0.80
                     s.colorTintFactor = 0.25
                     s.grain = 0.015
-                    s.vignette = 0.20
+                    s.sharpen = 0.10
+                    return s
+                }()
+            ),
+            FilterPreset(
+                id: "vintage_cross_process",
+                name: "Cross",
+                subtitle: "Color shift",
+                swatch: [.green, .pink],
+                state: {
+                    var s = PhotoEditState()
+                    s.contrast = 1.35
+                    s.saturation = 1.30
+                    s.colorTint = SIMD4<Float>(0.85, 1.0, 0.75, 1.0)
+                    s.colorTintIntensity = 0.80
+                    s.colorTintFactor = 0.35
+                    s.exposure = 0.10
+                    s.vibrance = 0.25
                     return s
                 }()
             ),
             FilterPreset(
                 id: "vintage_polaroid",
                 name: "Polaroid",
-                subtitle: "Instantâneo",
+                subtitle: "Instant",
                 swatch: [.yellow.opacity(0.8), .white],
                 state: {
                     var s = PhotoEditState()
@@ -302,8 +347,8 @@ struct PhotoEditorFilters: View {
             ),
             FilterPreset(
                 id: "vintage_film_emulation",
-                name: "Film Stock",
-                subtitle: "Emulação analógica",
+                name: "Film",
+                subtitle: "Analog emulation",
                 swatch: [.green.opacity(0.6), .orange.opacity(0.7)],
                 state: {
                     var s = PhotoEditState()
@@ -314,14 +359,14 @@ struct PhotoEditorFilters: View {
                     s.colorTint = SIMD4<Float>(0.90, 0.95, 0.80, 1.0)
                     s.colorTintIntensity = 0.70
                     s.colorTintFactor = 0.20
-                    s.vignette = 0.15
+                    s.clarity = 0.15
                     return s
                 }()
             ),
             FilterPreset(
                 id: "vintage_faded_memories",
                 name: "Faded",
-                subtitle: "Memórias desbotadas",
+                subtitle: "Faded memories",
                 swatch: [.gray.opacity(0.6), .pink.opacity(0.4)],
                 state: {
                     var s = PhotoEditState()
@@ -332,27 +377,24 @@ struct PhotoEditorFilters: View {
                     s.colorTint = SIMD4<Float>(1.0, 0.90, 0.95, 1.0)
                     s.colorTintIntensity = 0.60
                     s.colorTintFactor = 0.35
-                    s.vignette = 0.30
+                    s.grain = 0.015
                     return s
                 }()
             ),
             FilterPreset(
-                id: "vintage_lomography",
-                name: "Lomo",
-                subtitle: "Cross-processing",
-                swatch: [.purple, .green],
+                id: "vintage_infrared",
+                name: "Infrared",
+                subtitle: "False color",
+                swatch: [.white, .red],
                 state: {
                     var s = PhotoEditState()
-                    s.contrast = 1.40
-                    s.saturation = 1.45
-                    s.vibrance = 0.25
-                    s.vignette = 0.50
-                    s.colorTint = SIMD4<Float>(0.85, 1.0, 0.75, 1.0)
-                    s.colorTintSecondary = SIMD4<Float>(1.0, 0.70, 0.85, 1.0)
-                    s.isDualToneActive = true
+                    s.saturation = 0.0
+                    s.colorTint = SIMD4<Float>(1.0, 0.3, 0.3, 1.0)
                     s.colorTintIntensity = 0.90
-                    s.colorTintFactor = 0.40
-                    s.grain = 0.02
+                    s.colorTintFactor = 0.60
+                    s.contrast = 1.25
+                    s.brightness = 0.15
+                    s.clarity = 0.20
                     return s
                 }()
             )
@@ -363,8 +405,8 @@ struct PhotoEditorFilters: View {
         [
             FilterPreset(
                 id: "portrait_soft_skin",
-                name: "Soft Skin",
-                subtitle: "Pele suave",
+                name: "Soft",
+                subtitle: "Smooth skin",
                 swatch: [.pink.opacity(0.3), .white],
                 state: {
                     var s = PhotoEditState()
@@ -382,23 +424,23 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "portrait_dramatic",
                 name: "Dramatic",
-                subtitle: "Alto contraste",
+                subtitle: "High contrast",
                 swatch: [.black, .white],
                 state: {
                     var s = PhotoEditState()
                     s.contrast = 1.35
                     s.clarity = 0.40
                     s.sharpen = 0.20
-                    s.vignette = 0.25
                     s.saturation = 0.90
                     s.brightness = -0.03
+                    s.grain = 0.015
                     return s
                 }()
             ),
             FilterPreset(
                 id: "portrait_golden_hour",
-                name: "Golden Hour",
-                subtitle: "Luz dourada",
+                name: "Golden",
+                subtitle: "Golden light",
                 swatch: [.orange, .yellow],
                 state: {
                     var s = PhotoEditState()
@@ -414,8 +456,8 @@ struct PhotoEditorFilters: View {
             ),
             FilterPreset(
                 id: "portrait_cool_tones",
-                name: "Cool Tones",
-                subtitle: "Tons frios",
+                name: "Cool",
+                subtitle: "Cool tones",
                 swatch: [.blue, .cyan],
                 state: {
                     var s = PhotoEditState()
@@ -432,7 +474,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "portrait_matte",
                 name: "Matte",
-                subtitle: "Acabamento fosco",
+                subtitle: "Matte finish",
                 swatch: [.gray.opacity(0.7), .brown.opacity(0.5)],
                 state: {
                     var s = PhotoEditState()
@@ -453,8 +495,8 @@ struct PhotoEditorFilters: View {
         [
             FilterPreset(
                 id: "street_urban_grit",
-                name: "Urban Grit",
-                subtitle: "Urbano cru",
+                name: "Grit",
+                subtitle: "Raw urban",
                 swatch: [.gray, .black],
                 state: {
                     var s = PhotoEditState()
@@ -464,14 +506,14 @@ struct PhotoEditorFilters: View {
                     s.sharpen = 0.25
                     s.saturation = 0.80
                     s.brightness = -0.05
-                    s.vignette = 0.20
+                    s.exposure = -0.10
                     return s
                 }()
             ),
             FilterPreset(
                 id: "street_neon_nights",
-                name: "Neon Nights",
-                subtitle: "Noites néon",
+                name: "Neon",
+                subtitle: "Neon nights",
                 swatch: [.purple, .cyan],
                 state: {
                     var s = PhotoEditState()
@@ -490,7 +532,7 @@ struct PhotoEditorFilters: View {
             FilterPreset(
                 id: "street_documentary",
                 name: "Documentary",
-                subtitle: "Documental",
+                subtitle: "Documentary",
                 swatch: [.gray.opacity(0.8), .brown.opacity(0.6)],
                 state: {
                     var s = PhotoEditState()
@@ -506,8 +548,8 @@ struct PhotoEditorFilters: View {
             ),
             FilterPreset(
                 id: "street_high_contrast_bw",
-                name: "High Contrast",
-                subtitle: "P&B contrastado",
+                name: "Contrast",
+                subtitle: "High contrast B&W",
                 swatch: [.black, .white],
                 state: {
                     var s = PhotoEditState()
@@ -521,37 +563,52 @@ struct PhotoEditorFilters: View {
                 }()
             ),
             FilterPreset(
-                id: "street_golden_hour",
-                name: "Golden Street",
-                subtitle: "Rua dourada",
-                swatch: [.orange, .yellow],
+                id: "street_pixel_art",
+                name: "Pixel",
+                subtitle: "Digital retro",
+                swatch: [.green, .blue],
                 state: {
                     var s = PhotoEditState()
-                    s.colorTint = SIMD4<Float>(1.0, 0.80, 0.50, 1.0)
-                    s.colorTintIntensity = 0.85
-                    s.colorTintFactor = 0.35
-                    s.contrast = 1.20
-                    s.vibrance = 0.25
-                    s.exposure = 0.05
-                    s.clarity = 0.15
+                    s.pixelateAmount = 3.0
+                    s.contrast = 1.30
+                    s.saturation = 1.40
+                    s.sharpen = 0.20
+                    s.colorTint = SIMD4<Float>(0.8, 1.0, 0.9, 1.0)
+                    s.colorTintIntensity = 0.70
+                    s.colorTintFactor = 0.30
+                    s.clarity = 0.25
                     return s
                 }()
             ),
             FilterPreset(
-                id: "street_moody_blues",
-                name: "Moody Blues",
-                subtitle: "Azuis melancólicos",
-                swatch: [.blue, .indigo],
+                id: "street_vignette_focus",
+                name: "Focus",
+                subtitle: "Vignette focus",
+                swatch: [.black, .gray],
                 state: {
                     var s = PhotoEditState()
-                    s.colorTint = SIMD4<Float>(0.60, 0.75, 1.0, 1.0)
-                    s.colorTintIntensity = 0.80
-                    s.colorTintFactor = 0.40
+                    s.vignette = 0.60
                     s.contrast = 1.15
-                    s.saturation = 0.85
-                    s.brightness = -0.08
-                    s.vignette = 0.30
-                    s.clarity = 0.20
+                    s.clarity = 0.30
+                    s.saturation = 1.10
+                    s.brightness = 0.05
+                    return s
+                }()
+            ),
+            FilterPreset(
+                id: "street_thermal",
+                name: "Thermal",
+                subtitle: "Heat vision",
+                swatch: [.yellow, .red],
+                state: {
+                    var s = PhotoEditState()
+                    s.saturation = 0.0
+                    s.colorTint = SIMD4<Float>(1.0, 0.6, 0.2, 1.0)
+                    s.colorTintIntensity = 0.85
+                    s.colorTintFactor = 0.50
+                    s.contrast = 1.30
+                    s.clarity = 0.25
+                    s.brightness = 0.05
                     return s
                 }()
             )
@@ -580,8 +637,13 @@ struct PhotoEditorFilters: View {
         }
     }
 
+    private var allPresets: [FilterPreset] {
+        return classicsPresets + cinemaPresets + vintagePresets + portraitPresets + streetPresets + dostPresets
+    }
+
     private func presetsForSelected() -> [FilterPreset] {
         switch selectedGroup {
+        case .all: return allPresets
         case .classics: return classicsPresets
         case .cinema: return cinemaPresets
         case .vintage: return vintagePresets
@@ -593,11 +655,12 @@ struct PhotoEditorFilters: View {
 
     private func groupDescription(for group: FilterGroup) -> String {
         switch group {
-        case .classics: return "Filtros clássicos"
-        case .cinema: return "Efeitos cinematográficos"
-        case .vintage: return "Estética nostálgica"
-        case .portrait: return "Otimizado para retratos"
-        case .street: return "Fotografia urbana"
+        case .all: return "All filters"
+        case .classics: return "Classic filters"
+        case .cinema: return "Cinematic effects"
+        case .vintage: return "Nostalgic aesthetic"
+        case .portrait: return "Portrait optimized"
+        case .street: return "Urban photography"
         case .dost: return "DÖST universe"
         }
     }
@@ -624,9 +687,11 @@ struct PhotoEditorFilters: View {
                                     Text(g.rawValue)
                                         .font(.body.bold())
                                         .foregroundColor(.primary)
+                                        .lineLimit(1)
                                     Text(groupDescription(for: g))
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
+                                        .lineLimit(1)
                                 }
                                 Spacer(minLength: 8)
                                 Image(systemName: "chevron.right")
@@ -634,7 +699,6 @@ struct PhotoEditorFilters: View {
                             }
                             .padding(.vertical, 10)
                             .padding(.horizontal, 12)
-                            .frame(width: 180, alignment: .leading)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
                         }
@@ -650,13 +714,24 @@ struct PhotoEditorFilters: View {
         VStack(spacing: 10) {
             HStack {
                 Button(action: { withAnimation { stage = .groups } }) {
-                    Image(systemName: "chevron.left")
+                    HStack {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.primary)
+                        Text("Back")
+                            .font(.body.bold())
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 Spacer()
                 Text(selectedGroup.rawValue)
                     .font(.headline)
-                Spacer().frame(width: 24)
+                Spacer()
             }
             .padding(.horizontal)
 
@@ -710,6 +785,7 @@ struct PhotoEditorFilters: View {
                                 Text(preset.name)
                                     .font(.caption2.bold())
                                     .foregroundColor(.primary)
+                                    .lineLimit(1)
                             }
                             .frame(width: 62)
                         }
