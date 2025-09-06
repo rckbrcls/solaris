@@ -47,13 +47,24 @@ struct PhotoEditState: Codable, Equatable {
     // Adicione outros parâmetros depois
 }
 
+// Estrutura para salvar estado completo no undo (edit + base filter)
+struct CompleteEditState: Codable, Equatable {
+    var editState: PhotoEditState
+    var baseFilterState: PhotoEditState
+    
+    init(editState: PhotoEditState, baseFilterState: PhotoEditState) {
+        self.editState = editState
+        self.baseFilterState = baseFilterState
+    }
+}
+
 class PhotoEditorViewModel: ObservableObject {
     @Published var previewImage: UIImage?
     @Published var editState = PhotoEditState()
     @Published var lastUndoMessage: String? = nil
-    // Simple undo stack of edit states (one per user transaction)
-    private(set) var undoStack: [PhotoEditState] = []
-    private(set) var redoStack: [PhotoEditState] = []
+    // Simple undo stack of complete edit states (edit + base filter per user transaction)
+    private(set) var undoStack: [CompleteEditState] = []
+    private(set) var redoStack: [CompleteEditState] = []
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
     private var inChangeTransaction: Bool = false
@@ -63,6 +74,64 @@ class PhotoEditorViewModel: ObservableObject {
     private var previewBaseHigh: UIImage?
     private var previewBaseLow: UIImage?
     @Published var isInteracting: Bool = false
+    
+    // Para filtros aplicados com tap simples (persistem mas não mostram nos sliders)
+    @Published var baseFilterState = PhotoEditState() {
+        didSet {
+            print("[BaseFilter] baseFilterState changed!")
+            print("[BaseFilter] New saturation: \(baseFilterState.saturation)")
+            print("[BaseFilter] New colorTint: \(baseFilterState.colorTint)")
+            print("[BaseFilter] New isDualToneActive: \(baseFilterState.isDualToneActive)")
+        }
+    }
+    
+    // Estado combinado para renderização (filtro + ajustes do usuário)
+    var combinedState: PhotoEditState {
+        var combined = baseFilterState
+        
+        print("[CombinedState] Starting combination:")
+        print("[CombinedState] Base saturation: \(baseFilterState.saturation)")
+        print("[CombinedState] Edit saturation: \(editState.saturation)")
+        print("[CombinedState] Base colorTint: \(baseFilterState.colorTint)")
+        print("[CombinedState] Edit colorTint: \(editState.colorTint)")
+        
+        // SEMPRE aplica os ajustes do editState sobre o filtro base
+        // Não verifica valores padrão, simplesmente combina
+        
+        // Multiplicativos (sempre aplicados)
+        combined.contrast = baseFilterState.contrast * editState.contrast
+        combined.saturation = baseFilterState.saturation * editState.saturation
+        
+        // Aditivos (sempre aplicados)
+        combined.brightness = baseFilterState.brightness + editState.brightness
+        combined.exposure = baseFilterState.exposure + editState.exposure
+        combined.vibrance = baseFilterState.vibrance + editState.vibrance
+        combined.fade = baseFilterState.fade + editState.fade
+        combined.vignette = baseFilterState.vignette + editState.vignette
+        combined.grain = baseFilterState.grain + editState.grain
+        combined.sharpen = baseFilterState.sharpen + editState.sharpen
+        combined.clarity = baseFilterState.clarity + editState.clarity
+        combined.pixelateAmount = baseFilterState.pixelateAmount + editState.pixelateAmount
+        combined.skinTone = baseFilterState.skinTone + editState.skinTone
+        
+        // Efeitos de cor: se editState tem valores diferentes de padrão, usa eles
+        // Senão usa do filtro base
+        let defaultTint = SIMD4<Float>(0, 0, 0, 0)
+        if editState.colorTint != defaultTint || editState.isDualToneActive {
+            combined.colorTint = editState.colorTint
+            combined.colorTintSecondary = editState.colorTintSecondary
+            combined.isDualToneActive = editState.isDualToneActive
+            combined.colorTintIntensity = editState.colorTintIntensity
+            combined.colorTintFactor = editState.colorTintFactor
+        }
+        // Se editState não tem cor personalizada, usa do filtro base (já está copiado)
+        
+        print("[CombinedState] Final saturation: \(combined.saturation)")
+        print("[CombinedState] Final colorTint: \(combined.colorTint)")
+        print("[CombinedState] Final isDualToneActive: \(combined.isDualToneActive)")
+        
+        return combined
+    }
 
     // Adiciona referência à imagem original em alta qualidade
     public var originalImage: UIImage?
@@ -73,6 +142,7 @@ class PhotoEditorViewModel: ObservableObject {
         self.originalImage = image // Em memória: preview base
         self.originalImageURL = originalImageURL
         self.originalImageData = originalImageData
+        
         buildPreviewBases()
         if let base = self.previewBase {
             print("[PhotoEditorViewModel] previewBase size: \(base.size), scale: \(base.scale)")
@@ -82,11 +152,18 @@ class PhotoEditorViewModel: ObservableObject {
         } else {
             print("[PhotoEditorViewModel] previewBase is nil after resizeToFit")
         }
-        $editState
-            .removeDuplicates()
-            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.global(qos: .userInitiated))
-            .sink { [weak self] state in
-                self?.generatePreview(state: state)
+        // Listener unificado que monitora mudanças em qualquer dos dois states
+        Publishers.CombineLatest($editState, $baseFilterState)
+            .removeDuplicates { prev, curr in
+                prev.0 == curr.0 && prev.1 == curr.1
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (editState, baseState) in
+                guard let self = self else { return }
+                print("[Listener] States changed - edit saturation: \(editState.saturation), base saturation: \(baseState.saturation)")
+                let combined = self.combinedState
+                print("[Listener] Combined saturation: \(combined.saturation)")
+                self.generatePreview(state: combined)
             }
             .store(in: &cancellables)
     }
@@ -123,10 +200,11 @@ class PhotoEditorViewModel: ObservableObject {
         if let high = previewBaseHigh { previewBase = high }
         // finish the current transaction
         endChangeTransaction()
-        // Regerar preview final em alta
+        // Regerar preview final em alta usando o estado combinado
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            self.generatePreview(state: self.editState)
+            let combined = self.combinedState
+            self.generatePreview(state: combined)
         }
     }
 
@@ -142,15 +220,19 @@ class PhotoEditorViewModel: ObservableObject {
     // MARK: - Undo management
     func seedUndoBaselineIfNeeded(baseline: PhotoEditState = PhotoEditState()) {
         // Seed a single undo step to baseline on fresh sessions
-        if undoStack.isEmpty && editState != baseline {
-            undoStack.append(baseline)
+        let baselineComplete = CompleteEditState(editState: baseline, baseFilterState: PhotoEditState())
+        let currentComplete = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+        if undoStack.isEmpty && currentComplete != baselineComplete {
+            undoStack.append(baselineComplete)
             redoStack.removeAll()
         }
     }
 
     func beginChangeTransaction() {
         if !inChangeTransaction {
-            undoStack.append(editState)
+            // Salva o estado completo (editState + baseFilterState)
+            let completeState = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+            undoStack.append(completeState)
             // New transaction invalidates redo history
             redoStack.removeAll()
             inChangeTransaction = true
@@ -162,33 +244,48 @@ class PhotoEditorViewModel: ObservableObject {
     }
 
     func registerUndoPoint() {
-        // for discrete changes (button taps)
-        undoStack.append(editState)
+        // for discrete changes (button taps, filter applications)
+        let completeState = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+        undoStack.append(completeState)
         // Any new change invalidates redo history
         redoStack.removeAll()
     }
 
     func undoLastChange() {
         guard let previous = undoStack.popLast() else { return }
-        let current = editState
+        let current = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
         // push current state to redo stack so we can restore later
         redoStack.append(current)
-        editState = previous
+        
+        // Restaura ambos os estados
+        editState = previous.editState
+        baseFilterState = previous.baseFilterState
+        
         // Build a human-readable message of what changed back
-        let keys = diffChangedKeys(from: current, to: previous)
-        lastUndoMessage = buildUndoMessage(fromKeys: keys)
+        let editKeys = diffChangedKeys(from: current.editState, to: previous.editState)
+        let baseKeys = diffChangedKeys(from: current.baseFilterState, to: previous.baseFilterState)
+        lastUndoMessage = buildUndoMessage(fromEditKeys: editKeys, baseKeys: baseKeys)
+        
+        // Força regeneração do preview com o estado combinado
+        DispatchQueue.main.async {
+            let combined = self.combinedState
+            self.generatePreview(state: combined)
+        }
     }
 
     func resetAllEditsToClean() {
         // Make the full reset redoable as a single step
         let clean = PhotoEditState()
-        if editState != clean {
-            let previous = editState
+        let cleanComplete = CompleteEditState(editState: clean, baseFilterState: PhotoEditState())
+        let currentComplete = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+        
+        if currentComplete != cleanComplete {
             // Clear undo history and set redo to restore the whole previous state
             undoStack.removeAll()
-            redoStack = [previous]
+            redoStack = [currentComplete]
             editState = clean
-            lastUndoMessage = "Revertido: todos os ajustes"
+            baseFilterState = PhotoEditState()
+            lastUndoMessage = "Reverted: all adjustments"
         } else {
             // Nada a desfazer; não mostrar toast indevido
             lastUndoMessage = nil
@@ -196,16 +293,55 @@ class PhotoEditorViewModel: ObservableObject {
     }
 
     func clearLastUndoMessage() { lastUndoMessage = nil }
+    
+    // MARK: - Filter System
+    func applyBaseFilter(_ filterState: PhotoEditState) {
+        // Tap simples: aplica filtro como base, mantém sliders inalterados
+        print("[Filter] Applying base filter - INPUT colorTint: \(filterState.colorTint), saturation: \(filterState.saturation)")
+        print("[Filter] Applying base filter - INPUT contrast: \(filterState.contrast), isDualToneActive: \(filterState.isDualToneActive)")
+        
+        // Registra ponto de undo antes de aplicar o filtro
+        registerUndoPoint()
+        
+        baseFilterState = filterState
+        
+        print("[Filter] Base filter APPLIED - RESULT saturation: \(baseFilterState.saturation)")
+        print("[Filter] Base filter APPLIED - RESULT colorTint: \(baseFilterState.colorTint)")
+        print("[Filter] Base filter APPLIED - RESULT isDualToneActive: \(baseFilterState.isDualToneActive)")
+    }
+    
+    func applyCompleteFilter(_ filterState: PhotoEditState) {
+        // Long press: aplica filtro completo, zera base e altera sliders
+        print("[Filter] Applying complete filter")
+        
+        // Registra ponto de undo antes de aplicar o filtro completo
+        registerUndoPoint()
+        
+        baseFilterState = PhotoEditState() // Zera filtro base
+        editState = filterState  // Aplica tudo nos sliders
+    }
+    
+    func clearBaseFilter() {
+        print("[Filter] Clearing base filter")
+        
+        // Registra ponto de undo antes de limpar o filtro base
+        registerUndoPoint()
+        
+        baseFilterState = PhotoEditState()
+    }
 
     // Load persistent history when opening editor
     func loadPersistentUndoHistory(_ history: [PhotoEditState]) {
+        // Convert old PhotoEditState history to CompleteEditState
         // Deduplicate consecutive equals and drop any trailing state equal to the current editState
-        var cleaned: [PhotoEditState] = []
+        var cleaned: [CompleteEditState] = []
         cleaned.reserveCapacity(history.count)
         for s in history {
-            if cleaned.last != s { cleaned.append(s) }
+            let completeState = CompleteEditState(editState: s, baseFilterState: PhotoEditState())
+            if cleaned.last != completeState { cleaned.append(completeState) }
         }
-        while let last = cleaned.last, last == editState { cleaned.removeLast() }
+        let currentComplete = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+        while let last = cleaned.last, last == currentComplete { cleaned.removeLast() }
         // Clamp to last N steps to avoid excessive manifest size
         let limit = AppSettings.shared.historyLimit
         undoStack = Array(cleaned.suffix(limit))
@@ -242,91 +378,124 @@ class PhotoEditorViewModel: ObservableObject {
         return keys
     }
 
-    private func buildUndoMessage(fromKeys keys: [String]) -> String {
-        if keys.isEmpty { return "Nada para desfazer" }
+    private func buildUndoMessage(fromEditKeys editKeys: [String], baseKeys: [String]) -> String? {
+        // Se há mudanças no filtro base, priorize essa informação
+        if !baseKeys.isEmpty {
+            // Verifica se houve remoção ou aplicação de filtro
+            let hadFilter = baseKeys.contains { key in
+                // Verifica se o filtro anterior tinha valores não-padrão
+                key == "saturation" || key == "colorTint" || key == "contrast" || key == "isDualToneActive"
+            }
+            return hadFilter ? "Undone: Filter" : "Undone: Filter"
+        }
+        
+        if editKeys.isEmpty && baseKeys.isEmpty { 
+            return nil // Não mostrar mensagem se não há mudanças reais
+        }
+        
         let names: [String: String] = [
-            "contrast": "Contraste",
-            "brightness": "Brilho",
-            "exposure": "Exposição",
-            "saturation": "Saturação",
+            "contrast": "Contrast",
+            "brightness": "Brightness",
+            "exposure": "Exposure",
+            "saturation": "Saturation",
             "vibrance": "Vibrance",
-            "opacity": "Opacidade",
+            "opacity": "Opacity",
             "fade": "Fade",
             "vignette": "Vignette",
-            "colorInvert": "Inverter",
-            "pixelateAmount": "Pixelizar",
-            "sharpen": "Nitidez",
-            "clarity": "Clareza",
-            "grain": "Grão",
-            "grainSize": "Tamanho do Grão",
+            "colorInvert": "Invert",
+            "pixelateAmount": "Pixelate",
+            "sharpen": "Sharpness",
+            "clarity": "Clarity",
+            "grain": "Grain",
+            "grainSize": "Grain Size",
             "colorTint": "Tint",
-            "colorTintSecondary": "Tint Secundário",
-            "colorTintIntensity": "Intensidade do Tint",
-            "colorTintFactor": "Força do Tint",
+            "colorTintSecondary": "Secondary Tint",
+            "colorTintIntensity": "Tint Intensity",
+            "colorTintFactor": "Tint Strength",
             "isDualToneActive": "Dual Tone",
-            "skinTone": "Tom de Pele"
+            "skinTone": "Skin Tone"
         ]
-        if keys.count == 1 {
-            return "Revertido: \(names[keys[0]] ?? keys[0])"
+        if editKeys.count == 1 {
+            return "Undone: \(names[editKeys[0]] ?? editKeys[0])"
         }
-        let firstTwo = keys.prefix(2).compactMap { names[$0] ?? $0 }.joined(separator: ", ")
-        let rest = keys.count - 2
-        return rest > 0 ? "Revertido: \(firstTwo) +\(rest)" : "Revertido: \(firstTwo)"
+        let firstTwo = editKeys.prefix(2).compactMap { names[$0] ?? $0 }.joined(separator: ", ")
+        let rest = editKeys.count - 2
+        return rest > 0 ? "Undone: \(firstTwo) +\(rest)" : "Undone: \(firstTwo)"
     }
 
-    private func buildRestoreMessage(fromKeys keys: [String]) -> String {
-        if keys.isEmpty { return "Nada para restaurar" }
+    private func buildRestoreMessage(fromEditKeys editKeys: [String], baseKeys: [String]) -> String? {
+        // Se há mudanças no filtro base, priorize essa informação
+        if !baseKeys.isEmpty {
+            return "Restored: Filter"
+        }
+        
+        if editKeys.isEmpty && baseKeys.isEmpty { 
+            return nil // Não mostrar mensagem se não há mudanças reais
+        }
+        
         let names: [String: String] = [
-            "contrast": "Contraste",
-            "brightness": "Brilho",
-            "exposure": "Exposição",
-            "saturation": "Saturação",
+            "contrast": "Contrast",
+            "brightness": "Brightness",
+            "exposure": "Exposure",
+            "saturation": "Saturation",
             "vibrance": "Vibrance",
-            "opacity": "Opacidade",
+            "opacity": "Opacity",
             "fade": "Fade",
             "vignette": "Vignette",
-            "colorInvert": "Inverter",
-            "pixelateAmount": "Pixelizar",
-            "sharpen": "Nitidez",
-            "clarity": "Clareza",
-            "grain": "Grão",
-            "grainSize": "Tamanho do Grão",
+            "colorInvert": "Invert",
+            "pixelateAmount": "Pixelate",
+            "sharpen": "Sharpness",
+            "clarity": "Clarity",
+            "grain": "Grain",
+            "grainSize": "Grain Size",
             "colorTint": "Tint",
-            "colorTintSecondary": "Tint Secundário",
-            "colorTintIntensity": "Intensidade do Tint",
-            "colorTintFactor": "Força do Tint",
+            "colorTintSecondary": "Secondary Tint",
+            "colorTintIntensity": "Tint Intensity",
+            "colorTintFactor": "Tint Strength",
             "isDualToneActive": "Dual Tone",
-            "skinTone": "Tom de Pele"
+            "skinTone": "Skin Tone"
         ]
-        if keys.count == 1 {
-            return "Restaurado: \(names[keys[0]] ?? keys[0])"
+        if editKeys.count == 1 {
+            return "Restored: \(names[editKeys[0]] ?? editKeys[0])"
         }
-        let firstTwo = keys.prefix(2).compactMap { names[$0] ?? $0 }.joined(separator: ", ")
-        let rest = keys.count - 2
-        return rest > 0 ? "Restaurado: \(firstTwo) +\(rest)" : "Restaurado: \(firstTwo)"
+        let firstTwo = editKeys.prefix(2).compactMap { names[$0] ?? $0 }.joined(separator: ", ")
+        let rest = editKeys.count - 2
+        return rest > 0 ? "Restored: \(firstTwo) +\(rest)" : "Restored: \(firstTwo)"
     }
 
     func redoLastChange() {
         guard let next = redoStack.popLast() else { return }
-        let current = editState
+        let current = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
         // current becomes another undo point
         undoStack.append(current)
-        editState = next
-        let keys = diffChangedKeys(from: current, to: next)
-        lastUndoMessage = buildRestoreMessage(fromKeys: keys)
+        
+        // Restaura ambos os estados
+        editState = next.editState
+        baseFilterState = next.baseFilterState
+        
+        let editKeys = diffChangedKeys(from: current.editState, to: next.editState)
+        let baseKeys = diffChangedKeys(from: current.baseFilterState, to: next.baseFilterState)
+        lastUndoMessage = buildRestoreMessage(fromEditKeys: editKeys, baseKeys: baseKeys)
+        
+        // Força regeneração do preview com o estado combinado
+        DispatchQueue.main.async {
+            let combined = self.combinedState
+            self.generatePreview(state: combined)
+        }
     }
 
     func redoAllChanges() {
         guard !redoStack.isEmpty else { return }
-        var current = editState
+        var current = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
         var latest = current
         while let next = redoStack.popLast() {
             undoStack.append(current)
             current = next
             latest = next
         }
-        editState = latest
-        lastUndoMessage = "Restaurado: todos os ajustes"
+        editState = latest.editState
+        baseFilterState = latest.baseFilterState
+        lastUndoMessage = "Restored: all adjustments"
     }
 
     /// Gera a imagem final em alta qualidade com todos os ajustes aplicados
@@ -343,7 +512,9 @@ class PhotoEditorViewModel: ObservableObject {
         // Corrige orientação antes de gerar pipeline em alta
         let oriented = sourceUIImage?.fixOrientation()
         guard let base = oriented?.withAlpha(), let cgImage = base.cgImage, let mtiContext = mtiContext else { return nil }
-        let state = editState
+        
+        // Usa o estado combinado que inclui filtro base + ajustes do usuário
+        let state = combinedState
         // Repete o pipeline do generatePreview, mas usando a original
         let alphaInfo = cgImage.alphaInfo
         let bitsPerPixel = cgImage.bitsPerPixel

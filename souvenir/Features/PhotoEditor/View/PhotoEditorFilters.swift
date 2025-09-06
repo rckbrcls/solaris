@@ -31,6 +31,8 @@ struct PhotoEditorFilters: View {
     @Binding var editState: PhotoEditState
     var registerUndo: (() -> Void)? = nil
     var baseImage: UIImage?
+    var applyBaseFilter: ((PhotoEditState) -> Void)? = nil
+    var applyCompleteFilter: ((PhotoEditState) -> Void)? = nil
 
     @State private var selectedGroup: FilterGroup = .all
     @State private var stage: Stage = .groups
@@ -659,10 +661,19 @@ struct PhotoEditorFilters: View {
     }
 
     private func applyPreset(_ preset: FilterPreset) {
+        // Long press: aplica filtro completo (altera sliders)
         registerUndo?()
         withAnimation(.easeOut(duration: 0.18)) {
-            editState = preset.state
             selectedPresetID = preset.id
+            applyCompleteFilter?(preset.state)
+        }
+    }
+    
+    private func applyPresetVisualOnly(_ preset: FilterPreset) {
+        // Tap simples: aplica filtro como base, mantém sliders inalterados
+        withAnimation(.easeOut(duration: 0.18)) {
+            selectedPresetID = preset.id
+            applyBaseFilter?(preset.state)
         }
     }
 
@@ -730,58 +741,59 @@ struct PhotoEditorFilters: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(presetsForSelected(), id: \.id) { preset in
-                        Button(action: { applyPreset(preset) }) {
-                            VStack(spacing: 4) {
-                                ZStack {
-                                    if let thumb = thumbs[preset.id] {
-                                        Image(uiImage: thumb)
-                                            .resizable()
-                                            .aspectRatio(1, contentMode: .fill)
-                                            .frame(width: 56, height: 56)
-                                            .clipped()
-                                            .cornerRadius(10)
-                                    } else {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(LinearGradient(colors: preset.swatch, startPoint: .topLeading, endPoint: .bottomTrailing))
-                                            .frame(width: 56, height: 56)
-                                            .redacted(reason: .placeholder)
-                                    }
+                        VStack(spacing: 4) {
+                            ZStack {
+                                if let thumb = thumbs[preset.id] {
+                                    Image(uiImage: thumb)
+                                        .resizable()
+                                        .aspectRatio(1, contentMode: .fill)
+                                        .frame(width: 56, height: 56)
+                                        .clipped()
+                                        .cornerRadius(10)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(LinearGradient(colors: preset.swatch, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        .frame(width: 56, height: 56)
+                                        .redacted(reason: .placeholder)
                                 }
-                                .overlay(
-                                    Group {
-                                        if selectedPresetID == preset.id {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .font(.headline)
-                                                .foregroundColor(.white)
-                                                .shadow(radius: 3)
-                                        }
-                                    }, alignment: .center
-                                )
-                                .overlay(
-                                    Group {
-                                        if selectedGroup == .dost {
-                                            HStack {
-                                                Text(badgeText(for: preset))
-                                                    .font(.system(size: 9, weight: .black, design: .rounded))
-                                                    .foregroundColor(.white)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 3)
-                                                    .background(Color.black.opacity(0.55), in: Capsule())
-                                                    .padding(4)
-                                                Spacer()
-                                            }
-                                        }
-                                    }, alignment: .topLeading
-                                )
-                                .contentShape(RoundedRectangle(cornerRadius: 10))
-                                Text(preset.name)
-                                    .font(.caption2.bold())
-                                    .foregroundColor(.primary)
-                                    .lineLimit(1)
                             }
-                            .frame(width: 62)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(selectedPresetID == preset.id ? Color.accentColor : Color.clear, lineWidth: 3)
+                            )
+                            .overlay(
+                                Group {
+                                    if selectedGroup == .dost {
+                                        HStack {
+                                            Text(badgeText(for: preset))
+                                                .font(.system(size: 9, weight: .black, design: .rounded))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3)
+                                                .background(Color.black.opacity(0.55), in: Capsule())
+                                                .padding(4)
+                                            Spacer()
+                                        }
+                                    }
+                                }, alignment: .topLeading
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius: 10))
+                            .onTapGesture {
+                                // Tap simples: aplica visual mas mantém sliders
+                                applyPresetVisualOnly(preset)
+                            }
+                            .onLongPressGesture(minimumDuration: 0.5) {
+                                // Long press: aplica filtro completo (altera sliders)
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                impactFeedback.impactOccurred()
+                                applyPreset(preset)
+                            }
+                            Text(preset.name)
+                                .font(.caption2.bold())
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
                         }
-                        .buttonStyle(.plain)
+                        .frame(width: 62)
                     }
                 }
                 .padding(.horizontal, 8)

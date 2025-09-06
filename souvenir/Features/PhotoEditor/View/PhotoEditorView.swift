@@ -179,7 +179,9 @@ private extension PhotoEditorView {
             PhotoEditorFilters(
                 editState: $viewModel.editState,
                 registerUndo: { viewModel.registerUndoPoint() },
-                baseImage: viewModel.previewThumbnailBase ?? viewModel.originalImage
+                baseImage: viewModel.previewThumbnailBase ?? viewModel.originalImage,
+                applyBaseFilter: { filterState in viewModel.applyBaseFilter(filterState) },
+                applyCompleteFilter: { filterState in viewModel.applyCompleteFilter(filterState) }
             )
         } else if selectedCategory == "edit" {
             PhotoEditorAdjustments(
@@ -258,7 +260,9 @@ private extension PhotoEditorView {
                                 withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = true }
                             }
                         } else {
-                            onFinishEditing?(nil, nil, viewModel.undoStack, false)
+                            // Converte CompleteEditState de volta para PhotoEditState para compatibilidade
+                            let editHistory = viewModel.undoStack.map { $0.editState }
+                            onFinishEditing?(nil, nil, editHistory, false)
                             dismiss()
                         }
                     }) {
@@ -357,7 +361,9 @@ private extension PhotoEditorView {
                     Button(action: {
                         withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = false }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.23) {
-                            onFinishEditing?(nil, nil, viewModel.undoStack, false)
+                            // Converte CompleteEditState de volta para PhotoEditState para compatibilidade
+                            let editHistory = viewModel.undoStack.map { $0.editState }
+                            onFinishEditing?(nil, nil, editHistory, false)
                             dismiss()
                         }
                     }) {
@@ -403,7 +409,9 @@ private extension PhotoEditorView {
         DispatchQueue.global(qos: .userInitiated).async {
             let finalImage = viewModel.generateFinalImage()
             DispatchQueue.main.async {
-                onFinishEditing?(finalImage, viewModel.editState, viewModel.undoStack, true)
+                // Converte CompleteEditState de volta para PhotoEditState para compatibilidade
+                let editHistory = viewModel.undoStack.map { $0.editState }
+                onFinishEditing?(finalImage, viewModel.editState, editHistory, true)
                 viewModel.editState = initialEditState
                 isSaving = false
                 dismiss()
