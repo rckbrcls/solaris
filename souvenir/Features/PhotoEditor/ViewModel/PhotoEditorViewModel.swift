@@ -68,6 +68,7 @@ class PhotoEditorViewModel: ObservableObject {
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
     private var inChangeTransaction: Bool = false
+    private var filterChangePending: Bool = false // Flag para rastrear se mudanças de filtro precisam ser salvas no undo
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
     public var previewBase: UIImage?
@@ -200,11 +201,24 @@ class PhotoEditorViewModel: ObservableObject {
         if let high = previewBaseHigh { previewBase = high }
         // finish the current transaction
         endChangeTransaction()
+        // Marca que mudanças de filtro pendentes foram consolidadas em ajustes manuais
+        filterChangePending = false
         // Regerar preview final em alta usando o estado combinado
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let combined = self.combinedState
             self.generatePreview(state: combined)
+        }
+    }
+    
+    // Função para registrar undo point apenas na primeira aplicação de filtro
+    private func registerFilterUndoIfNeeded() {
+        if !filterChangePending {
+            // Primeira mudança de filtro desde o último undo/ajuste manual
+            let completeState = CompleteEditState(editState: editState, baseFilterState: baseFilterState)
+            undoStack.append(completeState)
+            redoStack.removeAll()
+            filterChangePending = true
         }
     }
 
@@ -235,6 +249,8 @@ class PhotoEditorViewModel: ObservableObject {
             undoStack.append(completeState)
             // New transaction invalidates redo history
             redoStack.removeAll()
+            // Reset da flag pois ajustes manuais consolidam mudanças de filtro
+            filterChangePending = false
             inChangeTransaction = true
         }
     }
@@ -261,6 +277,9 @@ class PhotoEditorViewModel: ObservableObject {
         editState = previous.editState
         baseFilterState = previous.baseFilterState
         
+        // Reset da flag para permitir novos undo points de filtros
+        filterChangePending = false
+        
         // Build a human-readable message of what changed back
         let editKeys = diffChangedKeys(from: current.editState, to: previous.editState)
         let baseKeys = diffChangedKeys(from: current.baseFilterState, to: previous.baseFilterState)
@@ -285,6 +304,8 @@ class PhotoEditorViewModel: ObservableObject {
             redoStack = [currentComplete]
             editState = clean
             baseFilterState = PhotoEditState()
+            // Reset da flag
+            filterChangePending = false
             lastUndoMessage = "Reverted: all adjustments"
         } else {
             // Nada a desfazer; não mostrar toast indevido
@@ -428,14 +449,14 @@ class PhotoEditorViewModel: ObservableObject {
         // Se o mesmo filtro já está aplicado como base, remove
         if isStatesSimilar(baseFilterState, filterState) {
             print("[Filter] TAP: Same base filter detected, removing")
-            registerUndoPoint()
+            registerFilterUndoIfNeeded()
             baseFilterState = defaultState
             return
         }
         
         // Aplica novo filtro como base (permite combinação com slider existente)
         print("[Filter] TAP: Applying new base filter (may combine with existing slider filter)")
-        registerUndoPoint()
+        registerFilterUndoIfNeeded()
         baseFilterState = filterState
         
         print("[Filter] TAP: Base filter applied - saturation: \(baseFilterState.saturation)")
@@ -454,7 +475,7 @@ class PhotoEditorViewModel: ObservableObject {
         // Se o mesmo filtro já está aplicado nos sliders, remove apenas ele
         if isStatesSimilar(editState, filterState) {
             print("[Filter] LONG PRESS: Same slider filter detected, removing")
-            registerUndoPoint()
+            registerFilterUndoIfNeeded()
             editState = defaultState
             // Preserva baseFilterState para permitir combinações
             return
@@ -462,7 +483,7 @@ class PhotoEditorViewModel: ObservableObject {
         
         // Aplica novo filtro nos sliders (permite combinação com base existente)
         print("[Filter] LONG PRESS: Applying new slider filter (may combine with existing base filter)")
-        registerUndoPoint()
+        registerFilterUndoIfNeeded()
         editState = filterState
         
         print("[Filter] LONG PRESS: Slider filter applied - saturation: \(editState.saturation)")
@@ -476,12 +497,12 @@ class PhotoEditorViewModel: ObservableObject {
         switch applicationType {
         case .base:
             print("[Filter] Removing base filter")
-            registerUndoPoint()
+            // NÃO registra undo automático para filtros
             baseFilterState = PhotoEditState()
             
         case .sliders:
             print("[Filter] Removing slider filter")
-            registerUndoPoint()
+            // NÃO registra undo automático para filtros
             editState = PhotoEditState()
             
         case .none:
@@ -493,19 +514,19 @@ class PhotoEditorViewModel: ObservableObject {
     
     func clearBaseFilter() {
         print("[Filter] Clearing base filter")
-        registerUndoPoint()
+        // NÃO registra undo automático para filtros
         baseFilterState = PhotoEditState()
     }
     
     func clearSliderFilter() {
         print("[Filter] Clearing slider filter")
-        registerUndoPoint()
+        // NÃO registra undo automático para filtros
         editState = PhotoEditState()
     }
     
     func clearAllFilters() {
         print("[Filter] Clearing all filters and adjustments")
-        registerUndoPoint()
+        // NÃO registra undo automático para filtros
         baseFilterState = PhotoEditState()
         editState = PhotoEditState()
     }
@@ -660,6 +681,9 @@ class PhotoEditorViewModel: ObservableObject {
         // Restaura ambos os estados
         editState = next.editState
         baseFilterState = next.baseFilterState
+        
+        // Reset da flag para permitir novos undo points de filtros
+        filterChangePending = false
         
         let editKeys = diffChangedKeys(from: current.editState, to: next.editState)
         let baseKeys = diffChangedKeys(from: current.baseFilterState, to: next.baseFilterState)
