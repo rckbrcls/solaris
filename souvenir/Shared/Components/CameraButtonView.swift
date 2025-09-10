@@ -11,7 +11,13 @@ struct CameraButtonView: View {
             Button(action: action) {
                 ZStack {
                     FluidGradient(
-                        blobs: [.gray, .black],
+                        blobs: [
+                            Color(white: 0),
+                            Color(white: 0.20),
+                            Color(white: 0.40),
+                            Color(white: 0.20),
+                            Color(white: 0),
+                        ],
                         speed: 1.0,
                         blur: 0.7
                     )
