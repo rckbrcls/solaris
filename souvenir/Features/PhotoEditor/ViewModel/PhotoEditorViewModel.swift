@@ -1063,30 +1063,10 @@ class PhotoEditorViewModel: ObservableObject {
             let scaleNorm = Float(max(0.0, min(1.0, (scaleFactor - 1.0) / (sMax - 1.0))))
             let noiseGain = Float(2.5 + 2.5 * scaleNorm) // 2.5x..5.0x
             let extent = CGRect(origin: .zero, size: finalImage.size)
+            // Always use procedural noise (CIRandomGenerator). Texture-based "film_grain" removed.
             var scaledNoise: CIImage? = nil
-            if let tex = UIImage(named: "film_grain"), let baseTile = CIImage(image: tex) {
-                // Ensure monochrome
-                let mono = CIFilter(name: "CIColorControls")
-                mono?.setValue(baseTile, forKey: kCIInputImageKey)
-                mono?.setValue(0.0, forKey: kCIInputSaturationKey)
-                mono?.setValue(NSNumber(value: 1.8 + 0.7 * Double(scaleNorm)), forKey: kCIInputContrastKey)
-                let tileMono = (mono?.outputImage ?? baseTile)
-                // Random offset to avoid visible seams
-                let tw = max(1.0, tileMono.extent.width * scaleFactor)
-                let th = max(1.0, tileMono.extent.height * scaleFactor)
-                let offX = CGFloat.random(in: 0..<tw)
-                let offY = CGFloat.random(in: 0..<th)
-                let transform = CGAffineTransform.identity
-                    .scaledBy(x: scaleFactor, y: scaleFactor)
-                    .translatedBy(x: offX, y: offY)
-                if let tile = CIFilter(name: "CIAffineTile") {
-                    tile.setValue(tileMono, forKey: kCIInputImageKey)
-                    tile.setValue(NSValue(cgAffineTransform: transform), forKey: kCIInputTransformKey)
-                    scaledNoise = (tile.outputImage ?? tileMono).cropped(to: extent)
-                }
-            }
-            if scaledNoise == nil, let random = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
-                // Monochrome procedural fallback
+            if let random = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
+                // Monochrome procedural noise
                 let mono = CIFilter(name: "CIColorControls")
                 mono?.setValue(random, forKey: kCIInputImageKey)
                 mono?.setValue(0.0, forKey: kCIInputSaturationKey)
