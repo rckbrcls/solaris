@@ -48,11 +48,16 @@ struct ContentView: View {
                 VStack(spacing: 0) {
                     Image(colorSchemeManager.currentColorScheme == .dark ? "logo" : "logo-light")
                         .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, minHeight: 32, maxHeight: 50)
-                        .padding(.horizontal, 32)
-                        .padding(.top, 12)
-                        .padding(.bottom, 8)
+                        .scaledToFit()
+                        .frame(height: 36)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .overlay(
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.1))
+                                .frame(height: 1),
+                            alignment: .bottom
+                        )
                     PhotosScrollView(
                         photos: $photos,
                         selectedItems: $selectedItems,
@@ -162,7 +167,6 @@ struct ContentView: View {
                     let item = photos[idx]
                     let rec = item.record
                     let initialEditState = rec.editState
-                    let baseURL = rec.editedURL ?? rec.originalURL
                     // Usa a imagem de preview que foi preparada ao tocar
                     let previewImage = selectedPhotoForEditor ?? item.image
                     // Para preservar qualidade SEMPRE, o processamento em alta deve usar SEMPRE o original da câmera
@@ -419,32 +423,8 @@ func loadUIImageFullQuality(from data: Data) -> UIImage? {
         return rawUTIs.contains(uti)
     }()
 
-    let maxSide = max(pixelWidth, pixelHeight)
-    // Consulta preferências do app
     let settings = AppSettings.shared
-    let defaultHandling = settings.rawHandlingDefault
-    let cap = isProbablyRAW ? settings.maxRawLongestSide : settings.maxNonRawLongestSide
-    let effectiveHandling: RawHandlingChoice = (defaultHandling == .ask) ? .optimized : defaultHandling
-    // Manter qualidade SEMPRE: não fazer downsample aqui
-    let shouldDownsample: Bool = false
-
     let scale: CGFloat = UIScreen.main.scale
-    if shouldDownsample {
-        let opts: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: cap,
-            kCGImageSourceShouldCacheImmediately: false,
-            kCGImageSourceShouldAllowFloat: false
-        ]
-        if let cgThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
-            // Já vem transformado (orientação correta). Evita passagens extras de draw.
-            return UIImage(cgImage: cgThumb, scale: scale, orientation: .up)
-        }
-        // Fallback: tenta caminho normal se thumbnail falhar
-    }
-
-    // Caminho padrão (não gigante): cria CGImage com orientação original e aplica depois
     let createOpts: [CFString: Any] = [
         kCGImageSourceShouldAllowFloat: true,
         kCGImageSourceShouldCacheImmediately: false

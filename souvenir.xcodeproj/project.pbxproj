@@ -583,6 +583,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = souvenir/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = solaris;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can snap some cool pics 😄";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
@@ -618,6 +620,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = souvenir/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = solaris;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can snap some cool pics 😄";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";

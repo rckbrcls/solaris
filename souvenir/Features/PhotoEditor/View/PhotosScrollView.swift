@@ -42,8 +42,13 @@ struct PhotosScrollView<PhotoType>: View {
                                      maxSelectionCount: 6,
                                      matching: .images) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(UIColor.systemGray5))
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(.clear) // keep shape for hit testing
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                                    )
                                 Image(systemName: "plus")
                                     .foregroundColor(Color(UIColor.systemGray))
                                     .font(.system(size: 28))
