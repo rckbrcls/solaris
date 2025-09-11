@@ -761,19 +761,30 @@ private struct AdjustmentIconButton: View {
             }
             .padding(8)
             .frame(width: 50, height: 50)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Material.ultraThin)
+
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.black.opacity(0.18))
+                        .blendMode(.overlay)
+                        .opacity(isActive ? 1 : 0)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isActive)
+                }
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(
-                        (isSelected || isActive)
+                        isSelected
                         ? colorSchemeManager.primaryColor.opacity(0.6)
                         : Color.primary.opacity(0.08),
-                        lineWidth: (isSelected || isActive) ? 2 : 1
+                        lineWidth: isSelected  ? 2 : 1
                     )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected || isActive)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
             )
-            .scaleEffect((isSelected || isActive) ? 1.02 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected || isActive)
+            .scaleEffect((isSelected) ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)
     }
