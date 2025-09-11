@@ -1008,46 +1008,45 @@ struct PhotoEditorFilters: View {
             f.setValue(output, forKey: kCIInputImageKey)
             if let o = f.outputImage { output = o }
         }
-        // Film Grain (overlay with centered noise; neutral at 0.5)
+        // Film Grain (symmetric B/W via overlay; higher density & coverage)
         if state.grain > 0.0 {
-            let intensity = max(0.0, min(1.0, state.grain * 10.0))
+            let baseK = max(0.0, min(1.0, state.grain * 10.0))
+            let shaped = CGFloat(pow(Double(baseK), 0.85))
             if let noise = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: output.extent) {
-                // Desaturate, keep mean ~0.5
+                // Monochrome noise
                 let mono = CIFilter(name: "CIColorControls")
                 mono?.setValue(noise, forKey: kCIInputImageKey)
                 mono?.setValue(0.0, forKey: kCIInputSaturationKey)
-                mono?.setValue(0.0, forKey: kCIInputBrightnessKey)
                 mono?.setValue(1.0, forKey: kCIInputContrastKey)
                 let noiseBW = mono?.outputImage ?? noise
-                // Optional blur for grain size
+                // Size control using Gaussian blur (coarser grain with more blur)
                 let blurRadius = CGFloat(max(0.0, min(1.0, state.grainSize))) * 6.0
-                let baseNoise = noiseBW
                 let sizedNoise: CIImage
                 if blurRadius > 0.0, let blur = CIFilter(name: "CIGaussianBlur") {
-                    blur.setValue(baseNoise, forKey: kCIInputImageKey)
+                    blur.setValue(noiseBW, forKey: kCIInputImageKey)
                     blur.setValue(blurRadius, forKey: kCIInputRadiusKey)
-                    sizedNoise = (blur.outputImage ?? baseNoise).cropped(to: output.extent)
-                } else { sizedNoise = baseNoise }
-                // Scale around 0.5: out = noise*amp + (0.5 - 0.5*amp)
+                    sizedNoise = (blur.outputImage ?? noiseBW).cropped(to: output.extent)
+                } else { sizedNoise = noiseBW }
+                // Normalize around 0.5 with amplitude control
                 let scale = CIFilter(name: "CIColorMatrix")!
+                let amp = shaped * 1.0 // 0..1
                 scale.setValue(sizedNoise, forKey: kCIInputImageKey)
-                let amp = CGFloat(0.2 + 0.8 * intensity)
                 scale.setValue(CIVector(x: amp, y: 0, z: 0, w: 0), forKey: "inputRVector")
                 scale.setValue(CIVector(x: 0, y: amp, z: 0, w: 0), forKey: "inputGVector")
                 scale.setValue(CIVector(x: 0, y: 0, z: amp, w: 0), forKey: "inputBVector")
                 scale.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
                 let bias = 0.5 - 0.5 * amp
                 scale.setValue(CIVector(x: bias, y: bias, z: bias, w: 0), forKey: "inputBiasVector")
-                let scaledNoise = scale.outputImage ?? sizedNoise
-                // Overlay blend (no explicit intensity), so lerp with alpha mask
+                let normalized = scale.outputImage ?? sizedNoise
+                // Overlay blend then lerp by shaped
                 let overlay = CIFilter(name: "CIOverlayBlendMode")!
-                overlay.setValue(scaledNoise, forKey: kCIInputImageKey)
+                overlay.setValue(normalized, forKey: kCIInputImageKey)
                 overlay.setValue(output, forKey: kCIInputBackgroundImageKey)
                 let overOut = overlay.outputImage ?? output
-                if intensity >= 1.0 {
+                if shaped >= 1.0 {
                     output = overOut
-                } else if intensity > 0.0 {
-                    let mask = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: CGFloat(intensity))).cropped(to: output.extent)
+                } else if shaped > 0.0 {
+                    let mask = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: shaped)).cropped(to: output.extent)
                     output = CIFilter(name: "CIBlendWithAlphaMask", parameters: [
                         kCIInputImageKey: overOut,
                         kCIInputBackgroundImageKey: output,
@@ -1188,23 +1187,18 @@ struct PhotoEditorFilters: View {
             }
         }
         
-        // Film Grain using MTI + CI noise (linear additive; size via resampling)
+        // Film Grain using MTI + CI noise (symmetric B/W via overlay)
         if state.grain > 0.0 {
             let baseK = max(0.0, min(1.0, state.grain * 10.0))
-            let shapedK = Float(pow(Double(baseK), 0.7))
+            let shaped = Float(pow(Double(baseK), 0.85))
             let sMax: CGFloat = 8.0
             let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
-            let ampBoost = CGFloat(pow(Double(scaleFactor), 0.6))
-            let k = min(1.0, Float(ampBoost) * shapedK * 1.2)
             let extent = CGRect(origin: .zero, size: mtiImage.size)
-            let sMaxLocal: CGFloat = 8.0
-            let scaleNorm = Float(max(0.0, min(1.0, (scaleFactor - 1.0) / (sMaxLocal - 1.0))))
-            let noiseGain = Float(2.5 + 2.5 * scaleNorm)
             if let rand = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
                 let mono = CIFilter(name: "CIColorControls")
                 mono?.setValue(rand, forKey: kCIInputImageKey)
                 mono?.setValue(0.0, forKey: kCIInputSaturationKey)
-                mono?.setValue(NSNumber(value: 1.8 + 0.7 * Double(scaleNorm)), forKey: kCIInputContrastKey)
+                mono?.setValue(1.0, forKey: kCIInputContrastKey)
                 let baseNoise = mono?.outputImage ?? rand
                 let sizedNoise: CIImage
                 if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
@@ -1216,42 +1210,22 @@ struct PhotoEditorFilters: View {
                     let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
                     sizedNoise = baseNoise.transformed(by: t).cropped(to: extent)
                 }
-                
-                // Linear additive zero-mean (monochrome, no hue shift)
-                let toLinear1 = MTIRGBColorSpaceConversionFilter()
-                toLinear1.inputColorSpace = .sRGB
-                toLinear1.outputColorSpace = .linearSRGB
-                toLinear1.outputAlphaType = .alphaIsOne
-                toLinear1.inputImage = mtiImage
-                guard let baseLinear = toLinear1.outputImage else { return nil }
+                // Normalize around 0.5 with amplitude control
+                let amp = Float(0.2 + 0.8 * shaped)
                 let noiseMTI = MTIImage(ciImage: sizedNoise, isOpaque: true)
-                let toLinear2 = MTIRGBColorSpaceConversionFilter()
-                toLinear2.inputColorSpace = .sRGB
-                toLinear2.outputColorSpace = .linearSRGB
-                toLinear2.outputAlphaType = .alphaIsOne
-                toLinear2.inputImage = noiseMTI
-                guard let noiseLinear = toLinear2.outputImage else { return nil }
-                let cm = MTIColorMatrixFilter(); cm.inputImage = noiseLinear
-                cm.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1)), bias: SIMD4<Float>(-0.5,-0.5,-0.5,0))
-                if let centered = cm.outputImage {
-                    let gainF = MTIColorMatrixFilter(); gainF.inputImage = centered
-                    gainF.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(noiseGain, noiseGain, noiseGain, 1)), bias: SIMD4<Float>(0,0,0,0))
-                    if let amplified = gainF.outputImage {
-                        let add = MTIBlendFilter(blendMode: .add)
-                        add.inputImage = amplified
-                        add.inputBackgroundImage = baseLinear
-                        add.intensity = k
-                        add.outputAlphaType = .alphaIsOne
-                        if let linearOut = add.outputImage {
-                            let toSRGB = MTIRGBColorSpaceConversionFilter()
-                            toSRGB.inputColorSpace = .linearSRGB
-                            toSRGB.outputColorSpace = .sRGB
-                            toSRGB.outputAlphaType = .alphaIsOne
-                            toSRGB.inputImage = linearOut
-                            if let out = toSRGB.outputImage { mtiImage = out }
-                        }
-                    }
-                }
+                let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
+                mat.colorMatrix = MTIColorMatrix(
+                    matrix: simd_float4x4(diagonal: SIMD4<Float>(amp, amp, amp, 1)),
+                    bias: SIMD4<Float>(0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0)
+                )
+                let normalized = mat.outputImage ?? noiseMTI
+                // Overlay blend directly in sRGB for speed (OK for thumbnails)
+                let over = MTIBlendFilter(blendMode: .overlay)
+                over.inputImage = normalized
+                over.inputBackgroundImage = mtiImage
+                over.intensity = shaped
+                over.outputAlphaType = .alphaIsOne
+                if let out = over.outputImage { mtiImage = out }
             }
         }
         do {
