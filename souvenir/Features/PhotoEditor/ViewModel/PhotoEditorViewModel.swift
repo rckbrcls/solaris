@@ -1085,7 +1085,7 @@ class PhotoEditorViewModel: ObservableObject {
             }
         }
 
-        // Film grain: symmetric black/white via Overlay (neutral at 0.5), full-frame coverage
+        // Film grain: per-pixel noise; Overlay + LinearLight for a refined look
         if state.grain > 0.0 {
             // Stronger response to the same slider value
             let baseK = max(0.0, min(1.0, state.grain * 20.0))
@@ -1103,41 +1103,41 @@ class PhotoEditorViewModel: ObservableObject {
                     tone.setValue(CIVector(x: 1.00, y: 1.00 - 1.00*c), forKey: "inputPoint4")
                     sizedNoise = (tone.outputImage ?? sizedNoise).cropped(to: extent)
                 }
-                // Normalize around 0.5 with adjustable contrast (amp) — stronger baseline
-                let amp = min(1.0, Float(0.35 + 0.75 * shaped)) // 0.35..1.0
+                // Normalize around 0.5 with adjustable contrast (amp)
+                let amp = min(1.0, Float(0.30 + 0.65 * shaped))
                 let noiseMTI = MTIImage(ciImage: sizedNoise, isOpaque: true)
                 let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
-                // Shift mean below 0.5 to favor darker speckles (stronger bias)
-                let darkBias: Float = max(0.0, min(0.10, 0.10 * shaped))
+                // Slight dark bias for more natural overlap
+                let darkBias: Float = max(0.0, min(0.07, 0.07 * shaped))
                 mat.colorMatrix = MTIColorMatrix(
                     matrix: simd_float4x4(diagonal: SIMD4<Float>(amp, amp, amp, 1)),
                     bias: SIMD4<Float>(0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0)
                 )
                 let normalized = mat.outputImage ?? noiseMTI
-                // Passo 1: Hard Light (grão principal escuro)
-                let over = MTIBlendFilter(blendMode: .hardLight)
+                // Passo 1: Overlay
+                let over = MTIBlendFilter(blendMode: .overlay)
                 over.inputImage = normalized
                 over.inputBackgroundImage = finalImage
-                let overlayIntensity = min(1.0, shaped * 2.0)
+                let overlayIntensity = min(1.0, shaped * 1.35)
                 over.intensity = overlayIntensity
                 over.outputAlphaType = .alphaIsOne
                 if let out = over.outputImage { finalImage = out }
 
-                // Passo 2: Soft Light (grão cinza adicional, sutil)
-                let amp2 = min(1.0, Float(0.15 + 0.35 * shaped))
+                // Passo 2: Linear Light (sutil)
+                let amp2 = min(1.0, Float(0.10 + 0.25 * shaped))
                 let mat2 = MTIColorMatrixFilter(); mat2.inputImage = noiseMTI
-                let darkBias2: Float = min(0.12, 0.12 * shaped)
+                let darkBias2: Float = min(0.08, 0.08 * shaped)
                 mat2.colorMatrix = MTIColorMatrix(
                     matrix: simd_float4x4(diagonal: SIMD4<Float>(amp2, amp2, amp2, 1)),
                     bias: SIMD4<Float>(0.5 - 0.5 * amp2 - darkBias2, 0.5 - 0.5 * amp2 - darkBias2, 0.5 - 0.5 * amp2 - darkBias2, 0)
                 )
                 let normalized2 = mat2.outputImage ?? noiseMTI
-                let soft = MTIBlendFilter(blendMode: .softLight)
-                soft.inputImage = normalized2
-                soft.inputBackgroundImage = finalImage
-                soft.intensity = min(1.0, shaped * 0.65)
-                soft.outputAlphaType = .alphaIsOne
-                if let out2 = soft.outputImage { finalImage = out2 }
+                let lin = MTIBlendFilter(blendMode: .linearLight)
+                lin.inputImage = normalized2
+                lin.inputBackgroundImage = finalImage
+                lin.intensity = min(1.0, overlayIntensity * 0.50)
+                lin.outputAlphaType = .alphaIsOne
+                if let out2 = lin.outputImage { finalImage = out2 }
             }
         }
         do {
@@ -1461,46 +1461,46 @@ class PhotoEditorViewModel: ObservableObject {
             }
         }
 
-        // Film grain: symmetric black/white via Overlay (neutral at 0.5), full-frame coverage
+        // Film grain: per-pixel noise; Overlay + LinearLight for a refined look
         if state.grain > 0.0 {
             // Stronger response to the same slider value
             let baseK = max(0.0, min(1.0, state.grain * 20.0))
             let shaped = Float(pow(Double(baseK), 0.75))
             let extent = CGRect(origin: .zero, size: finalImage.size)
             if let sizedNoise = makeNoiseCIImage(extent: extent, grainSize: state.grainSize, seed: 0.0) {
-                let amp = min(1.0, Float(0.35 + 0.75 * shaped))
+                let amp = min(1.0, Float(0.30 + 0.65 * shaped))
                 let noiseMTI = MTIImage(ciImage: sizedNoise, isOpaque: true)
                 let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
-                let darkBias: Float = max(0.0, min(0.10, 0.10 * shaped))
+                let darkBias: Float = max(0.0, min(0.07, 0.07 * shaped))
                 mat.colorMatrix = MTIColorMatrix(
                     matrix: simd_float4x4(diagonal: SIMD4<Float>(amp, amp, amp, 1)),
                     bias: SIMD4<Float>(0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0)
                 )
                 let normalized = mat.outputImage ?? noiseMTI
-                // Passo 1: Hard Light (grão principal escuro)
-                let over = MTIBlendFilter(blendMode: .hardLight)
+                // Passo 1: Overlay
+                let over = MTIBlendFilter(blendMode: .overlay)
                 over.inputImage = normalized
                 over.inputBackgroundImage = finalImage
-                let overlayIntensity = min(1.0, shaped * 2.0)
+                let overlayIntensity = min(1.0, shaped * 1.35)
                 over.intensity = overlayIntensity
                 over.outputAlphaType = .alphaIsOne
                 if let out = over.outputImage { finalImage = out }
 
-                // Passo 2: Soft Light (grão cinza adicional, sutil)
-                let amp2 = min(1.0, Float(0.15 + 0.35 * shaped))
+                // Passo 2: Linear Light (sutil)
+                let amp2 = min(1.0, Float(0.10 + 0.25 * shaped))
                 let mat2 = MTIColorMatrixFilter(); mat2.inputImage = noiseMTI
-                let darkBias2b: Float = min(0.12, 0.12 * shaped)
+                let darkBias2b: Float = min(0.08, 0.08 * shaped)
                 mat2.colorMatrix = MTIColorMatrix(
                     matrix: simd_float4x4(diagonal: SIMD4<Float>(amp2, amp2, amp2, 1)),
                     bias: SIMD4<Float>(0.5 - 0.5 * amp2 - darkBias2b, 0.5 - 0.5 * amp2 - darkBias2b, 0.5 - 0.5 * amp2 - darkBias2b, 0)
                 )
                 let normalized2 = mat2.outputImage ?? noiseMTI
-                let soft = MTIBlendFilter(blendMode: .softLight)
-                soft.inputImage = normalized2
-                soft.inputBackgroundImage = finalImage
-                soft.intensity = min(1.0, shaped * 0.65)
-                soft.outputAlphaType = .alphaIsOne
-                if let out2 = soft.outputImage { finalImage = out2 }
+                let lin = MTIBlendFilter(blendMode: .linearLight)
+                lin.inputImage = normalized2
+                lin.inputBackgroundImage = finalImage
+                lin.intensity = min(1.0, overlayIntensity * 0.50)
+                lin.outputAlphaType = .alphaIsOne
+                if let out2 = lin.outputImage { finalImage = out2 }
             }
         }
 
