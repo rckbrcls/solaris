@@ -12,6 +12,7 @@ import CoreImage
 import MetalPetal
 import os.log
 import CoreGraphics
+import CoreImage.CIFilterBuiltins
 
 struct PhotoEditState: Codable, Equatable {
     var contrast: Float = 1.0
@@ -72,6 +73,38 @@ class PhotoEditorViewModel: ObservableObject {
     private var interactionStartState: CompleteEditState? = nil // Estado no início da interação (para verificar se houve mudanças)
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
+    private static let ciContext = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
+    // CI kernel para gerar ruído per-pixel (3 oitavas) evitando padrões de reamostragem
+    private static let ciGrainKernel: CIColorKernel? = {
+        let src = """
+        kernel vec4 grainNoise(__sample s, float seed) {
+            vec2 p = destCoord();
+            // Hash-based white noise, 3 octaves para evitar padrões perceptíveis
+            float n1 = fract(sin(dot(p + vec2(seed*19.19, seed*27.13), vec2(12.9898,78.233))) * 43758.5453);
+            float n2 = fract(sin(dot(p*1.97 + vec2(seed*3.31, seed*1.73), vec2(39.3467,11.1351))) * 37534.5453);
+            float n3 = fract(sin(dot(p*2.53 + vec2(seed*7.07, seed*5.41), vec2(73.1562,91.3458))) * 31514.8723);
+            float n = (n1*0.62 + n2*0.28 + n3*0.10);
+            return vec4(n, n, n, 1.0);
+        }
+        """
+        return CIColorKernel(source: src)
+    }()
+
+    // Gera um CIImage de ruído no tamanho alvo, com controle de tamanho via blur gaussiano
+    private func makeNoiseCIImage(extent: CGRect, grainSize: Float, seed: Float = 0.0) -> CIImage? {
+        guard let kernel = Self.ciGrainKernel else { return nil }
+        let dummy = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1)).cropped(to: extent)
+        guard var noise = kernel.apply(extent: extent, arguments: [dummy, seed]) else { return nil }
+        // Ajuste de tamanho do grão via blur (evita artefatos de linhas de reamostragem)
+        let r = CGFloat(max(0.0, min(1.0, grainSize))) * 6.0
+        if r > 0.0 {
+            let blur = CIFilter.gaussianBlur()
+            blur.inputImage = noise
+            blur.radius = Float(r)
+            noise = (blur.outputImage ?? noise).cropped(to: extent)
+        }
+        return noise
+    }
     public var previewBase: UIImage?
     private var previewBaseHigh: UIImage?
     private var previewBaseLow: UIImage?
@@ -1057,40 +1090,22 @@ class PhotoEditorViewModel: ObservableObject {
             // Stronger response to the same slider value
             let baseK = max(0.0, min(1.0, state.grain * 20.0))
             let shaped = Float(pow(Double(baseK), 0.75)) // faster ramp for low values
-            let sMax: CGFloat = 8.0
-            let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
             let extent = CGRect(origin: .zero, size: finalImage.size)
-            if let random = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
-                // Monochrome noise, keep mean around 0.5 then adjust contrast around 0.5
-                let mono = CIFilter(name: "CIColorControls")
-                mono?.setValue(random, forKey: kCIInputImageKey)
-                mono?.setValue(0.0, forKey: kCIInputSaturationKey)
-                mono?.setValue(1.0, forKey: kCIInputContrastKey)
-                let baseNoise = (mono?.outputImage ?? random)
-                var scaledNoise: CIImage
-                if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
-                    lanczos.setValue(baseNoise, forKey: kCIInputImageKey)
-                    lanczos.setValue(scaleFactor, forKey: kCIInputScaleKey)
-                    lanczos.setValue(1.0, forKey: kCIInputAspectRatioKey)
-                    scaledNoise = (lanczos.outputImage ?? baseNoise).cropped(to: extent)
-                } else {
-                    let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
-                    scaledNoise = baseNoise.transformed(by: t).cropped(to: extent)
-                }
+            if var sizedNoise = makeNoiseCIImage(extent: extent, grainSize: state.grainSize, seed: 0.0) {
                 // Compress highlights in noise to reduce white speckles
                 if let tone = CIFilter(name: "CIToneCurve") {
-                    tone.setValue(scaledNoise, forKey: kCIInputImageKey)
+                    tone.setValue(sizedNoise, forKey: kCIInputImageKey)
                     let c = CGFloat(min(0.15, Double(shaped) * 0.15))
                     tone.setValue(CIVector(x: 0.0,  y: 0.0),  forKey: "inputPoint0")
                     tone.setValue(CIVector(x: 0.25, y: max(0.0, 0.25 - 0.25*c)), forKey: "inputPoint1")
                     tone.setValue(CIVector(x: 0.50, y: max(0.0, 0.50 - 0.50*c)), forKey: "inputPoint2")
                     tone.setValue(CIVector(x: 0.75, y: 0.75 - 0.75*c), forKey: "inputPoint3")
                     tone.setValue(CIVector(x: 1.00, y: 1.00 - 1.00*c), forKey: "inputPoint4")
-                    scaledNoise = (tone.outputImage ?? scaledNoise).cropped(to: extent)
+                    sizedNoise = (tone.outputImage ?? sizedNoise).cropped(to: extent)
                 }
                 // Normalize around 0.5 with adjustable contrast (amp) — stronger baseline
                 let amp = min(1.0, Float(0.35 + 0.75 * shaped)) // 0.35..1.0
-                let noiseMTI = MTIImage(ciImage: scaledNoise, isOpaque: true)
+                let noiseMTI = MTIImage(ciImage: sizedNoise, isOpaque: true)
                 let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
                 // Shift mean below 0.5 to favor darker speckles (stronger bias)
                 let darkBias: Float = max(0.0, min(0.10, 0.10 * shaped))
@@ -1451,27 +1466,10 @@ class PhotoEditorViewModel: ObservableObject {
             // Stronger response to the same slider value
             let baseK = max(0.0, min(1.0, state.grain * 20.0))
             let shaped = Float(pow(Double(baseK), 0.75))
-            let sMax: CGFloat = 8.0
-            let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
             let extent = CGRect(origin: .zero, size: finalImage.size)
-            if let random = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
-                let mono = CIFilter(name: "CIColorControls")
-                mono?.setValue(random, forKey: kCIInputImageKey)
-                mono?.setValue(0.0, forKey: kCIInputSaturationKey)
-                mono?.setValue(1.0, forKey: kCIInputContrastKey)
-                let baseNoise = (mono?.outputImage ?? random)
-                let scaledNoise: CIImage
-                if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
-                    lanczos.setValue(baseNoise, forKey: kCIInputImageKey)
-                    lanczos.setValue(scaleFactor, forKey: kCIInputScaleKey)
-                    lanczos.setValue(1.0, forKey: kCIInputAspectRatioKey)
-                    scaledNoise = (lanczos.outputImage ?? baseNoise).cropped(to: extent)
-                } else {
-                    let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
-                    scaledNoise = baseNoise.transformed(by: t).cropped(to: extent)
-                }
+            if let sizedNoise = makeNoiseCIImage(extent: extent, grainSize: state.grainSize, seed: 0.0) {
                 let amp = min(1.0, Float(0.35 + 0.75 * shaped))
-                let noiseMTI = MTIImage(ciImage: scaledNoise, isOpaque: true)
+                let noiseMTI = MTIImage(ciImage: sizedNoise, isOpaque: true)
                 let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
                 let darkBias: Float = max(0.0, min(0.10, 0.10 * shaped))
                 mat.colorMatrix = MTIColorMatrix(

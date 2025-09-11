@@ -1224,8 +1224,6 @@ struct PhotoEditorFilters: View {
             // Stronger response to the same slider value
             let baseK = max(0.0, min(1.0, state.grain * 20.0))
             let shaped = Float(pow(Double(baseK), 0.75))
-            let sMax: CGFloat = 8.0
-            let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
             let extent = CGRect(origin: .zero, size: mtiImage.size)
             if let rand = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: extent) {
                 let mono = CIFilter(name: "CIColorControls")
@@ -1233,15 +1231,15 @@ struct PhotoEditorFilters: View {
                 mono?.setValue(0.0, forKey: kCIInputSaturationKey)
                 mono?.setValue(1.0, forKey: kCIInputContrastKey)
                 let baseNoise = mono?.outputImage ?? rand
+                // Use Gaussian blur for size control to avoid line-pattern artifacts
+                let blurRadius = CGFloat(max(0.0, min(1.0, state.grainSize))) * 6.0
                 var sizedNoise: CIImage
-                if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
-                    lanczos.setValue(baseNoise, forKey: kCIInputImageKey)
-                    lanczos.setValue(scaleFactor, forKey: kCIInputScaleKey)
-                    lanczos.setValue(1.0, forKey: kCIInputAspectRatioKey)
-                    sizedNoise = (lanczos.outputImage ?? baseNoise).cropped(to: extent)
+                if blurRadius > 0.0, let blur = CIFilter(name: "CIGaussianBlur") {
+                    blur.setValue(baseNoise, forKey: kCIInputImageKey)
+                    blur.setValue(blurRadius, forKey: kCIInputRadiusKey)
+                    sizedNoise = (blur.outputImage ?? baseNoise).cropped(to: extent)
                 } else {
-                    let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
-                    sizedNoise = baseNoise.transformed(by: t).cropped(to: extent)
+                    sizedNoise = baseNoise
                 }
                 // Compress highlights in noise to reduce white speckles
                 if let tone = CIFilter(name: "CIToneCurve") {
