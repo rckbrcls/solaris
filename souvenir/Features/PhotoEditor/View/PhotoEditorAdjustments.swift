@@ -767,7 +767,7 @@ private struct AdjustmentIconButton: View {
                         .fill(Material.ultraThin)
 
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.black.opacity(0.5))
+                        .fill(Color.black.opacity(0.65))
                         .blendMode(.overlay)
                         .opacity(isActive ? 1 : 0)
                         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isActive)
