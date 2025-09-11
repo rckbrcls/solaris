@@ -90,21 +90,45 @@ class PhotoEditorViewModel: ObservableObject {
         return CIColorKernel(source: src)
     }()
 
-    // Luma-preserving grain: adjusts only luminance (Y), preserves chroma.
+    // Luma-preserving grain: single-pass kernel computes noise internally (fast, no extra textures)
     private static let ciLumaGrainKernel: CIColorKernel? = {
         let src = """
-        kernel vec4 lumaGrain(__sample s, __sample n, float strength) {
-            vec3 srgb = s.rgb;
-            // Approximate sRGB -> linear
-            vec3 lin = pow(srgb, vec3(2.2));
-            float Y = dot(lin, vec3(0.2126, 0.7152, 0.0722));
-            float noise = n.r - 0.5; // zero-mean
-            float Yp = clamp(Y + strength * noise, 0.0, 1.0);
-            float eps = 1e-5;
-            float scale = (Y > eps) ? (Yp / Y) : 0.0;
-            vec3 linOut = clamp(lin * scale, 0.0, 1.0);
-            // linear -> sRGB approx
-            vec3 srgbOut = pow(linOut, vec3(1.0/2.2));
+        vec3 srgbToLinear(vec3 c) {
+            vec3 low  = c / 12.92;
+            vec3 high = pow((c + 0.055) / 1.055, vec3(2.4));
+            vec3 cond = step(vec3(0.04045), c);
+            return mix(low, high, cond);
+        }
+        vec3 linearToSrgb(vec3 c) {
+            vec3 low  = 12.92 * c;
+            vec3 high = 1.055 * pow(max(c, 0.0), vec3(1.0/2.4)) - vec3(0.055);
+            vec3 cond = step(vec3(0.0031308), c);
+            return mix(low, high, cond);
+        }
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
+        }
+        // 3-octave noise, size-controlled by base frequency
+        float grainNoise(vec2 p, float baseFreq, float seed) {
+            vec2 o1 = vec2(seed*19.19, seed*27.13);
+            vec2 o2 = vec2(seed*3.31,  seed*1.73);
+            vec2 o3 = vec2(seed*7.07,  seed*5.41);
+            float n1 = hash(p*baseFreq + o1);
+            float n2 = hash(p*baseFreq*1.97 + o2);
+            float n3 = hash(p*baseFreq*2.53 + o3);
+            return (n1*0.62 + n2*0.28 + n3*0.10) - 0.5; // zero-mean
+        }
+        kernel vec4 lumaGrain(__sample s, float strength, float size, float seed) {
+            vec2 p = destCoord();
+            // Map size: 0 (fine, high freq) -> 1 (coarse, low freq)
+            float baseFreq = mix(2.4, 0.7, clamp(size, 0.0, 1.0));
+            float n = grainNoise(p, baseFreq, seed);
+            vec3 lin = srgbToLinear(s.rgb);
+            const vec3 w = vec3(0.2126, 0.7152, 0.0722);
+            float Y = dot(lin, w);
+            float Yp = clamp(Y + strength * n, 0.0, 1.0);
+            vec3 linOut = clamp(lin + (Yp - Y) * w, 0.0, 1.0);
+            vec3 srgbOut = linearToSrgb(linOut);
             return vec4(srgbOut, s.a);
         }
         """
@@ -114,17 +138,7 @@ class PhotoEditorViewModel: ObservableObject {
     // Apply luma-preserving grain using a single CIColorKernel, then return CGImage
     private func applyLumaPreservingGrainCI(to cgImage: CGImage, size: CGSize, state: PhotoEditState) -> CGImage? {
         guard state.grain > 0 else { return cgImage }
-        guard let kernel = Self.ciLumaGrainKernel else { return cgImage }
-        let extent = CGRect(origin: .zero, size: size)
-        let baseCI = CIImage(cgImage: cgImage)
-        guard let noise = makeNoiseCIImage(extent: extent, grainSize: state.grainSize, seed: 0.0) else { return cgImage }
-        // Shape the strength to keep the existing feel at low values
-        // Much stronger, more responsive ramp per slider
-        let baseK = max(0.0, min(1.0, state.grain * 48.0))
-        let shaped = Float(pow(Double(baseK), 0.55))
-        let strength: Float = 0.34 * shaped
-        guard let out = kernel.apply(extent: extent, arguments: [baseCI, noise, strength]) else { return cgImage }
-        return Self.ciContext.createCGImage(out, from: out.extent) ?? cgImage
+        return LumaGrain.applyToCGImage(cgImage, grain: state.grain, grainSize: state.grainSize, seed: 0.0)
     }
 
     // Gera um CIImage de ruído no tamanho alvo, com controle de tamanho via blur gaussiano

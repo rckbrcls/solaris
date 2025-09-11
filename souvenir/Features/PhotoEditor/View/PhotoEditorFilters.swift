@@ -70,16 +70,40 @@ struct PhotoEditorFilters: View {
     // Luma-preserving grain (single pass): adjusts only luminance, keeps chroma.
     private static let ciLumaGrainKernel: CIColorKernel? = {
         let src = """
-        kernel vec4 lumaGrain(__sample s, __sample n, float strength) {
-            vec3 srgb = s.rgb;
-            vec3 lin = pow(srgb, vec3(2.2));
-            float Y = dot(lin, vec3(0.2126, 0.7152, 0.0722));
-            float noise = n.r - 0.5;
-            float Yp = clamp(Y + strength * noise, 0.0, 1.0);
-            float eps = 1e-5;
-            float scale = (Y > eps) ? (Yp / Y) : 0.0;
-            vec3 linOut = clamp(lin * scale, 0.0, 1.0);
-            vec3 srgbOut = pow(linOut, vec3(1.0/2.2));
+        vec3 srgbToLinear(vec3 c) {
+            vec3 low  = c / 12.92;
+            vec3 high = pow((c + 0.055) / 1.055, vec3(2.4));
+            vec3 cond = step(vec3(0.04045), c);
+            return mix(low, high, cond);
+        }
+        vec3 linearToSrgb(vec3 c) {
+            vec3 low  = 12.92 * c;
+            vec3 high = 1.055 * pow(max(c, 0.0), vec3(1.0/2.4)) - vec3(0.055);
+            vec3 cond = step(vec3(0.0031308), c);
+            return mix(low, high, cond);
+        }
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
+        }
+        float grainNoise(vec2 p, float baseFreq, float seed) {
+            vec2 o1 = vec2(seed*19.19, seed*27.13);
+            vec2 o2 = vec2(seed*3.31,  seed*1.73);
+            vec2 o3 = vec2(seed*7.07,  seed*5.41);
+            float n1 = hash(p*baseFreq + o1);
+            float n2 = hash(p*baseFreq*1.97 + o2);
+            float n3 = hash(p*baseFreq*2.53 + o3);
+            return (n1*0.62 + n2*0.28 + n3*0.10) - 0.5;
+        }
+        kernel vec4 lumaGrain(__sample s, float strength, float size, float seed) {
+            vec2 p = destCoord();
+            float baseFreq = mix(2.4, 0.7, clamp(size, 0.0, 1.0));
+            float n = grainNoise(p, baseFreq, seed);
+            vec3 lin = srgbToLinear(s.rgb);
+            const vec3 w = vec3(0.2126, 0.7152, 0.0722);
+            float Y = dot(lin, w);
+            float Yp = clamp(Y + strength * n, 0.0, 1.0);
+            vec3 linOut = clamp(lin + (Yp - Y) * w, 0.0, 1.0);
+            vec3 srgbOut = linearToSrgb(linOut);
             return vec4(srgbOut, s.a);
         }
         """
@@ -1058,15 +1082,9 @@ struct PhotoEditorFilters: View {
             f.setValue(output, forKey: kCIInputImageKey)
             if let o = f.outputImage { output = o }
         }
-        // Film Grain (simple, luma-preserving kernel)
+        // Film Grain (simple, luma-preserving kernel, noise computed in-kernel)
         if state.grain > 0.0 {
-            if let kernel = Self.ciLumaGrainKernel, let noise = makeNoiseCIImage(extent: output.extent, grainSize: state.grainSize, seed: 0.0) {
-                // Much stronger, more responsive ramp per slider
-                let baseK = max(0.0, min(1.0, state.grain * 48.0))
-                let shaped = Float(pow(Double(baseK), 0.55))
-                let strength: Float = 0.34 * shaped
-                output = kernel.apply(extent: output.extent, arguments: [output, noise, strength]) ?? output
-            }
+            output = LumaGrain.apply(to: output, grain: state.grain, grainSize: state.grainSize, seed: 0.0)
         }
         // Render to UIImage
         if let cg = ciContext.createCGImage(output, from: output.extent) {
@@ -1203,18 +1221,8 @@ struct PhotoEditorFilters: View {
         // Film Grain simplified: apply luma-preserving grain as a final CI pass after CGImage generation
         do {
             var out = try mtiContext.makeCGImage(from: mtiImage)
-            if state.grain > 0.0, let kernel = Self.ciLumaGrainKernel {
-                let extent = CGRect(origin: .zero, size: mtiImage.size)
-                if let noise = makeNoiseCIImage(extent: extent, grainSize: state.grainSize, seed: 0.0) {
-                    let base = CIImage(cgImage: out)
-                    // Much stronger, more responsive ramp per slider
-                    let baseK = max(0.0, min(1.0, state.grain * 48.0))
-                    let shaped = Float(pow(Double(baseK), 0.55))
-                    let strength: Float = 0.34 * shaped
-                    if let composited = kernel.apply(extent: extent, arguments: [base, noise, strength]) {
-                        out = ciContext.createCGImage(composited, from: composited.extent) ?? out
-                    }
-                }
+            if state.grain > 0.0 {
+                out = LumaGrain.applyToCGImage(out, grain: state.grain, grainSize: state.grainSize, seed: 0.0)
             }
             return UIImage(cgImage: out, scale: scaled.scale, orientation: .up)
         } catch { return nil }
