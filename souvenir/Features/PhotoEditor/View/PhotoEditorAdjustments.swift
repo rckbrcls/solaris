@@ -85,13 +85,13 @@ struct RulerSlider: View {
 
                 // Thumb - posicionamento corrigido para centrar nos ticks
                 RoundedRectangle(cornerRadius: thumbSize / 2.5, style: .continuous)
-                    .fill(Color.primary)
-                    .shadow(color: Color.primary.opacity(0.25), radius: 6, x: 0, y: 2)
+                    .fill(.white)
+                    .shadow(color: .white.opacity(0.1), radius: 6, x: 0, y: 2)
                     .frame(width: thumbSize * 1.2, height: thumbSize)
                     .overlay(
                         Text(format(clampedValue))
                             .font(.caption2.bold())
-                            .foregroundColor(.white)
+                            .foregroundColor(.gray)
                             .frame(width: thumbSize * 1.2, height: thumbSize)
                     )
                     .offset(x: leftInset + currentX - (thumbSize * 1.2) / 2)
