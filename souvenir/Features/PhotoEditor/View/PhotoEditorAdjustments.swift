@@ -64,13 +64,7 @@ struct RulerSlider: View {
             let maxTickWidth: CGFloat = 2.5
 
             ZStack(alignment: .leading) {
-                // Trilha suave ao fundo
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(colorSchemeManager.primaryColor.opacity(0.08))
-                    .frame(height: max(2, rulerHeight * 0.35))
-                    .offset(y: rulerHeight * 0.3)
-                    .padding(.leading, leftInset)
-                    .padding(.trailing, rightInset)
+         
 
                 // Régua (posicionamento absoluto para garantir simetria perfeita)
                 ZStack(alignment: .leading) {
@@ -91,8 +85,8 @@ struct RulerSlider: View {
 
                 // Thumb - posicionamento corrigido para centrar nos ticks
                 RoundedRectangle(cornerRadius: thumbSize / 2.5, style: .continuous)
-                    .fill(Color.accentColor)
-                    .shadow(color: Color.accentColor.opacity(0.25), radius: 6, x: 0, y: 2)
+                    .fill(Color.primary)
+                    .shadow(color: Color.primary.opacity(0.25), radius: 6, x: 0, y: 2)
                     .frame(width: thumbSize * 1.2, height: thumbSize)
                     .overlay(
                         Text(format(clampedValue))
