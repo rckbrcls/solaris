@@ -1010,8 +1010,10 @@ struct PhotoEditorFilters: View {
         }
         // Film Grain (symmetric B/W via overlay; higher density & coverage)
         if state.grain > 0.0 {
-            let baseK = max(0.0, min(1.0, state.grain * 10.0))
-            let shaped = CGFloat(pow(Double(baseK), 0.85))
+            // Stronger response to the same slider value
+            let baseK = max(0.0, min(1.0, state.grain * 20.0))
+            let shaped = CGFloat(pow(Double(baseK), 0.75))
+            let overlayAlpha = min(1.0, shaped * 2.0)
             if let noise = CIFilter(name: "CIRandomGenerator")?.outputImage?.cropped(to: output.extent) {
                 // Monochrome noise
                 let mono = CIFilter(name: "CIColorControls")
@@ -1027,31 +1029,61 @@ struct PhotoEditorFilters: View {
                     blur.setValue(blurRadius, forKey: kCIInputRadiusKey)
                     sizedNoise = (blur.outputImage ?? noiseBW).cropped(to: output.extent)
                 } else { sizedNoise = noiseBW }
-                // Normalize around 0.5 with amplitude control
+                // Normalize around 0.5 with amplitude control — stronger baseline
                 let scale = CIFilter(name: "CIColorMatrix")!
-                let amp = shaped * 1.0 // 0..1
+                let amp = min(1.0, 0.35 + 0.75 * shaped) // 0.35..1.0
                 scale.setValue(sizedNoise, forKey: kCIInputImageKey)
                 scale.setValue(CIVector(x: amp, y: 0, z: 0, w: 0), forKey: "inputRVector")
                 scale.setValue(CIVector(x: 0, y: amp, z: 0, w: 0), forKey: "inputGVector")
                 scale.setValue(CIVector(x: 0, y: 0, z: amp, w: 0), forKey: "inputBVector")
                 scale.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-                let bias = 0.5 - 0.5 * amp
+                // Shift mean below 0.5 to favor darker speckles (stronger bias)
+                let darkBias = min(0.10, 0.10 * shaped)
+                let bias = 0.5 - 0.5 * amp - darkBias
                 scale.setValue(CIVector(x: bias, y: bias, z: bias, w: 0), forKey: "inputBiasVector")
                 let normalized = scale.outputImage ?? sizedNoise
-                // Overlay blend then lerp by shaped
-                let overlay = CIFilter(name: "CIOverlayBlendMode")!
+                // Passo 1: Hard Light blend
+                let overlay = CIFilter(name: "CIHardLightBlendMode")!
                 overlay.setValue(normalized, forKey: kCIInputImageKey)
                 overlay.setValue(output, forKey: kCIInputBackgroundImageKey)
                 let overOut = overlay.outputImage ?? output
-                if shaped >= 1.0 {
+                if overlayAlpha >= 1.0 {
                     output = overOut
-                } else if shaped > 0.0 {
-                    let mask = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: shaped)).cropped(to: output.extent)
+                } else if overlayAlpha > 0.0 {
+                    let mask = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: overlayAlpha)).cropped(to: output.extent)
                     output = CIFilter(name: "CIBlendWithAlphaMask", parameters: [
                         kCIInputImageKey: overOut,
                         kCIInputBackgroundImageKey: output,
                         kCIInputMaskImageKey: mask
                     ])?.outputImage ?? overOut
+                }
+
+                // Passo 2: Soft Light (grão cinza sutil)
+                let scale2 = CIFilter(name: "CIColorMatrix")!
+                let amp2 = min(1.0, 0.15 + 0.35 * shaped)
+                scale2.setValue(sizedNoise, forKey: kCIInputImageKey)
+                scale2.setValue(CIVector(x: amp2, y: 0, z: 0, w: 0), forKey: "inputRVector")
+                scale2.setValue(CIVector(x: 0, y: amp2, z: 0, w: 0), forKey: "inputGVector")
+                scale2.setValue(CIVector(x: 0, y: 0, z: amp2, w: 0), forKey: "inputBVector")
+                scale2.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
+                let darkBias2 = min(0.12, 0.12 * shaped)
+                let bias2 = 0.5 - 0.5 * amp2 - darkBias2
+                scale2.setValue(CIVector(x: bias2, y: bias2, z: bias2, w: 0), forKey: "inputBiasVector")
+                let normalized2 = scale2.outputImage ?? sizedNoise
+                let soft = CIFilter(name: "CISoftLightBlendMode")!
+                soft.setValue(normalized2, forKey: kCIInputImageKey)
+                soft.setValue(output, forKey: kCIInputBackgroundImageKey)
+                let softOut = soft.outputImage ?? output
+                let alpha2 = min(1.0, overlayAlpha * 0.65)
+                if alpha2 >= 1.0 {
+                    output = softOut
+                } else if alpha2 > 0.0 {
+                    let mask2 = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: alpha2)).cropped(to: output.extent)
+                    output = CIFilter(name: "CIBlendWithAlphaMask", parameters: [
+                        kCIInputImageKey: softOut,
+                        kCIInputBackgroundImageKey: output,
+                        kCIInputMaskImageKey: mask2
+                    ])?.outputImage ?? softOut
                 }
             }
         }
@@ -1187,10 +1219,11 @@ struct PhotoEditorFilters: View {
             }
         }
         
-        // Film Grain using MTI + CI noise (symmetric B/W via overlay)
+        // Film Grain using MTI + CI noise (symmetric B/W via hard light)
         if state.grain > 0.0 {
-            let baseK = max(0.0, min(1.0, state.grain * 10.0))
-            let shaped = Float(pow(Double(baseK), 0.85))
+            // Stronger response to the same slider value
+            let baseK = max(0.0, min(1.0, state.grain * 20.0))
+            let shaped = Float(pow(Double(baseK), 0.75))
             let sMax: CGFloat = 8.0
             let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
             let extent = CGRect(origin: .zero, size: mtiImage.size)
@@ -1200,7 +1233,7 @@ struct PhotoEditorFilters: View {
                 mono?.setValue(0.0, forKey: kCIInputSaturationKey)
                 mono?.setValue(1.0, forKey: kCIInputContrastKey)
                 let baseNoise = mono?.outputImage ?? rand
-                let sizedNoise: CIImage
+                var sizedNoise: CIImage
                 if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
                     lanczos.setValue(baseNoise, forKey: kCIInputImageKey)
                     lanczos.setValue(scaleFactor, forKey: kCIInputScaleKey)
@@ -1210,22 +1243,50 @@ struct PhotoEditorFilters: View {
                     let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
                     sizedNoise = baseNoise.transformed(by: t).cropped(to: extent)
                 }
-                // Normalize around 0.5 with amplitude control
-                let amp = Float(0.2 + 0.8 * shaped)
+                // Compress highlights in noise to reduce white speckles
+                if let tone = CIFilter(name: "CIToneCurve") {
+                    tone.setValue(sizedNoise, forKey: kCIInputImageKey)
+                    let c = CGFloat(min(0.15, Double(shaped) * 0.15))
+                    tone.setValue(CIVector(x: 0.0,  y: 0.0),  forKey: "inputPoint0")
+                    tone.setValue(CIVector(x: 0.25, y: max(0.0, 0.25 - 0.25*c)), forKey: "inputPoint1")
+                    tone.setValue(CIVector(x: 0.50, y: max(0.0, 0.50 - 0.50*c)), forKey: "inputPoint2")
+                    tone.setValue(CIVector(x: 0.75, y: 0.75 - 0.75*c), forKey: "inputPoint3")
+                    tone.setValue(CIVector(x: 1.00, y: 1.00 - 1.00*c), forKey: "inputPoint4")
+                    sizedNoise = (tone.outputImage ?? sizedNoise).cropped(to: extent)
+                }
+                // Normalize around 0.5 with amplitude control — stronger baseline
+                let amp = min(1.0, Float(0.35 + 0.75 * shaped))
                 let noiseMTI = MTIImage(ciImage: sizedNoise, isOpaque: true)
                 let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
+                let darkBias = max(0.0, min(0.10, 0.10 * shaped))
                 mat.colorMatrix = MTIColorMatrix(
                     matrix: simd_float4x4(diagonal: SIMD4<Float>(amp, amp, amp, 1)),
-                    bias: SIMD4<Float>(0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0)
+                    bias: SIMD4<Float>(0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0)
                 )
                 let normalized = mat.outputImage ?? noiseMTI
-                // Overlay blend directly in sRGB for speed (OK for thumbnails)
-                let over = MTIBlendFilter(blendMode: .overlay)
+                // Passo 1: Hard Light (principal)
+                let over = MTIBlendFilter(blendMode: .hardLight)
                 over.inputImage = normalized
                 over.inputBackgroundImage = mtiImage
-                over.intensity = shaped
+                let overlayIntensity = min(1.0, shaped * 2.0)
+                over.intensity = overlayIntensity
                 over.outputAlphaType = .alphaIsOne
                 if let out = over.outputImage { mtiImage = out }
+
+                // Passo 2: Soft Light (cinza sutil)
+                let amp2 = min(1.0, Float(0.15 + 0.35 * shaped))
+                let mat2 = MTIColorMatrixFilter(); mat2.inputImage = MTIImage(ciImage: sizedNoise, isOpaque: true)
+                mat2.colorMatrix = MTIColorMatrix(
+                    matrix: simd_float4x4(diagonal: SIMD4<Float>(amp2, amp2, amp2, 1)),
+                    bias: SIMD4<Float>(0.5 - 0.5 * amp2, 0.5 - 0.5 * amp2, 0.5 - 0.5 * amp2, 0)
+                )
+                let normalized2 = mat2.outputImage ?? MTIImage(ciImage: sizedNoise, isOpaque: true)
+                let soft = MTIBlendFilter(blendMode: .softLight)
+                soft.inputImage = normalized2
+                soft.inputBackgroundImage = mtiImage
+                soft.intensity = min(1.0, overlayIntensity * 0.65)
+                soft.outputAlphaType = .alphaIsOne
+                if let out2 = soft.outputImage { mtiImage = out2 }
             }
         }
         do {

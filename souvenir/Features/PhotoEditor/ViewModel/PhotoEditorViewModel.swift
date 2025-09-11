@@ -1054,8 +1054,9 @@ class PhotoEditorViewModel: ObservableObject {
 
         // Film grain: symmetric black/white via Overlay (neutral at 0.5), full-frame coverage
         if state.grain > 0.0 {
-            let baseK = max(0.0, min(1.0, state.grain * 10.0))
-            let shaped = Float(pow(Double(baseK), 0.85)) // smoother ramp
+            // Stronger response to the same slider value
+            let baseK = max(0.0, min(1.0, state.grain * 20.0))
+            let shaped = Float(pow(Double(baseK), 0.75)) // faster ramp for low values
             let sMax: CGFloat = 8.0
             let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
             let extent = CGRect(origin: .zero, size: finalImage.size)
@@ -1066,7 +1067,7 @@ class PhotoEditorViewModel: ObservableObject {
                 mono?.setValue(0.0, forKey: kCIInputSaturationKey)
                 mono?.setValue(1.0, forKey: kCIInputContrastKey)
                 let baseNoise = (mono?.outputImage ?? random)
-                let scaledNoise: CIImage
+                var scaledNoise: CIImage
                 if let lanczos = CIFilter(name: "CILanczosScaleTransform") {
                     lanczos.setValue(baseNoise, forKey: kCIInputImageKey)
                     lanczos.setValue(scaleFactor, forKey: kCIInputScaleKey)
@@ -1076,21 +1077,52 @@ class PhotoEditorViewModel: ObservableObject {
                     let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
                     scaledNoise = baseNoise.transformed(by: t).cropped(to: extent)
                 }
-                // Normalize around 0.5 with adjustable contrast (amp)
-                let amp = Float(0.2 + 0.8 * shaped) // 0.2..1.0
+                // Compress highlights in noise to reduce white speckles
+                if let tone = CIFilter(name: "CIToneCurve") {
+                    tone.setValue(scaledNoise, forKey: kCIInputImageKey)
+                    let c = CGFloat(min(0.15, Double(shaped) * 0.15))
+                    tone.setValue(CIVector(x: 0.0,  y: 0.0),  forKey: "inputPoint0")
+                    tone.setValue(CIVector(x: 0.25, y: max(0.0, 0.25 - 0.25*c)), forKey: "inputPoint1")
+                    tone.setValue(CIVector(x: 0.50, y: max(0.0, 0.50 - 0.50*c)), forKey: "inputPoint2")
+                    tone.setValue(CIVector(x: 0.75, y: 0.75 - 0.75*c), forKey: "inputPoint3")
+                    tone.setValue(CIVector(x: 1.00, y: 1.00 - 1.00*c), forKey: "inputPoint4")
+                    scaledNoise = (tone.outputImage ?? scaledNoise).cropped(to: extent)
+                }
+                // Normalize around 0.5 with adjustable contrast (amp) — stronger baseline
+                let amp = min(1.0, Float(0.35 + 0.75 * shaped)) // 0.35..1.0
                 let noiseMTI = MTIImage(ciImage: scaledNoise, isOpaque: true)
                 let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
+                // Shift mean below 0.5 to favor darker speckles (stronger bias)
+                let darkBias: Float = max(0.0, min(0.10, 0.10 * shaped))
                 mat.colorMatrix = MTIColorMatrix(
                     matrix: simd_float4x4(diagonal: SIMD4<Float>(amp, amp, amp, 1)),
-                    bias: SIMD4<Float>(0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0)
+                    bias: SIMD4<Float>(0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0)
                 )
                 let normalized = mat.outputImage ?? noiseMTI
-                let over = MTIBlendFilter(blendMode: .overlay)
+                // Passo 1: Hard Light (grão principal escuro)
+                let over = MTIBlendFilter(blendMode: .hardLight)
                 over.inputImage = normalized
                 over.inputBackgroundImage = finalImage
-                over.intensity = shaped
+                let overlayIntensity = min(1.0, shaped * 2.0)
+                over.intensity = overlayIntensity
                 over.outputAlphaType = .alphaIsOne
                 if let out = over.outputImage { finalImage = out }
+
+                // Passo 2: Soft Light (grão cinza adicional, sutil)
+                let amp2 = min(1.0, Float(0.15 + 0.35 * shaped))
+                let mat2 = MTIColorMatrixFilter(); mat2.inputImage = noiseMTI
+                let darkBias2: Float = min(0.12, 0.12 * shaped)
+                mat2.colorMatrix = MTIColorMatrix(
+                    matrix: simd_float4x4(diagonal: SIMD4<Float>(amp2, amp2, amp2, 1)),
+                    bias: SIMD4<Float>(0.5 - 0.5 * amp2 - darkBias2, 0.5 - 0.5 * amp2 - darkBias2, 0.5 - 0.5 * amp2 - darkBias2, 0)
+                )
+                let normalized2 = mat2.outputImage ?? noiseMTI
+                let soft = MTIBlendFilter(blendMode: .softLight)
+                soft.inputImage = normalized2
+                soft.inputBackgroundImage = finalImage
+                soft.intensity = min(1.0, shaped * 0.65)
+                soft.outputAlphaType = .alphaIsOne
+                if let out2 = soft.outputImage { finalImage = out2 }
             }
         }
         do {
@@ -1416,8 +1448,9 @@ class PhotoEditorViewModel: ObservableObject {
 
         // Film grain: symmetric black/white via Overlay (neutral at 0.5), full-frame coverage
         if state.grain > 0.0 {
-            let baseK = max(0.0, min(1.0, state.grain * 10.0))
-            let shaped = Float(pow(Double(baseK), 0.85))
+            // Stronger response to the same slider value
+            let baseK = max(0.0, min(1.0, state.grain * 20.0))
+            let shaped = Float(pow(Double(baseK), 0.75))
             let sMax: CGFloat = 8.0
             let scaleFactor = 1.0 + CGFloat(max(0.0, min(1.0, state.grainSize))) * (sMax - 1.0)
             let extent = CGRect(origin: .zero, size: finalImage.size)
@@ -1437,20 +1470,39 @@ class PhotoEditorViewModel: ObservableObject {
                     let t = CGAffineTransform(scaleX: scaleFactor, y: scaleFactor)
                     scaledNoise = baseNoise.transformed(by: t).cropped(to: extent)
                 }
-                let amp = Float(0.2 + 0.8 * shaped)
+                let amp = min(1.0, Float(0.35 + 0.75 * shaped))
                 let noiseMTI = MTIImage(ciImage: scaledNoise, isOpaque: true)
                 let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
+                let darkBias: Float = max(0.0, min(0.10, 0.10 * shaped))
                 mat.colorMatrix = MTIColorMatrix(
                     matrix: simd_float4x4(diagonal: SIMD4<Float>(amp, amp, amp, 1)),
-                    bias: SIMD4<Float>(0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0.5 - 0.5 * amp, 0)
+                    bias: SIMD4<Float>(0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0)
                 )
                 let normalized = mat.outputImage ?? noiseMTI
-                let over = MTIBlendFilter(blendMode: .overlay)
+                // Passo 1: Hard Light (grão principal escuro)
+                let over = MTIBlendFilter(blendMode: .hardLight)
                 over.inputImage = normalized
                 over.inputBackgroundImage = finalImage
-                over.intensity = shaped
+                let overlayIntensity = min(1.0, shaped * 2.0)
+                over.intensity = overlayIntensity
                 over.outputAlphaType = .alphaIsOne
                 if let out = over.outputImage { finalImage = out }
+
+                // Passo 2: Soft Light (grão cinza adicional, sutil)
+                let amp2 = min(1.0, Float(0.15 + 0.35 * shaped))
+                let mat2 = MTIColorMatrixFilter(); mat2.inputImage = noiseMTI
+                let darkBias2b: Float = min(0.12, 0.12 * shaped)
+                mat2.colorMatrix = MTIColorMatrix(
+                    matrix: simd_float4x4(diagonal: SIMD4<Float>(amp2, amp2, amp2, 1)),
+                    bias: SIMD4<Float>(0.5 - 0.5 * amp2 - darkBias2b, 0.5 - 0.5 * amp2 - darkBias2b, 0.5 - 0.5 * amp2 - darkBias2b, 0)
+                )
+                let normalized2 = mat2.outputImage ?? noiseMTI
+                let soft = MTIBlendFilter(blendMode: .softLight)
+                soft.inputImage = normalized2
+                soft.inputBackgroundImage = finalImage
+                soft.intensity = min(1.0, shaped * 0.65)
+                soft.outputAlphaType = .alphaIsOne
+                if let out2 = soft.outputImage { finalImage = out2 }
             }
         }
 
