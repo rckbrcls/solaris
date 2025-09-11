@@ -67,6 +67,25 @@ struct PhotoEditorFilters: View {
         return CIColorKernel(source: src)
     }()
 
+    // Luma-preserving grain (single pass): adjusts only luminance, keeps chroma.
+    private static let ciLumaGrainKernel: CIColorKernel? = {
+        let src = """
+        kernel vec4 lumaGrain(__sample s, __sample n, float strength) {
+            vec3 srgb = s.rgb;
+            vec3 lin = pow(srgb, vec3(2.2));
+            float Y = dot(lin, vec3(0.2126, 0.7152, 0.0722));
+            float noise = n.r - 0.5;
+            float Yp = clamp(Y + strength * noise, 0.0, 1.0);
+            float eps = 1e-5;
+            float scale = (Y > eps) ? (Yp / Y) : 0.0;
+            vec3 linOut = clamp(lin * scale, 0.0, 1.0);
+            vec3 srgbOut = pow(linOut, vec3(1.0/2.2));
+            return vec4(srgbOut, s.a);
+        }
+        """
+        return CIColorKernel(source: src)
+    }()
+
     // Build noise at target resolution with Gaussian sizing (no scaling)
     private func makeNoiseCIImage(extent: CGRect, grainSize: Float, seed: Float = 0.0) -> CIImage? {
         guard let kernel = Self.ciGrainKernel else { return nil }
@@ -1039,67 +1058,14 @@ struct PhotoEditorFilters: View {
             f.setValue(output, forKey: kCIInputImageKey)
             if let o = f.outputImage { output = o }
         }
-        // Film Grain (per-pixel noise; Overlay + LinearLight for a new look)
+        // Film Grain (simple, luma-preserving kernel)
         if state.grain > 0.0 {
-            let baseK = max(0.0, min(1.0, state.grain * 20.0))
-            let shaped = CGFloat(pow(Double(baseK), 0.75))
-            let overlayAlpha = min(1.0, shaped * 1.35)
-            if var sizedNoise = makeNoiseCIImage(extent: output.extent, grainSize: state.grainSize, seed: 0.0) {
-                // Normalize around 0.5 with amplitude control
-                let scale = CIFilter(name: "CIColorMatrix")!
-                let amp = min(1.0, 0.30 + 0.65 * shaped)
-                scale.setValue(sizedNoise, forKey: kCIInputImageKey)
-                scale.setValue(CIVector(x: amp, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                scale.setValue(CIVector(x: 0, y: amp, z: 0, w: 0), forKey: "inputGVector")
-                scale.setValue(CIVector(x: 0, y: 0, z: amp, w: 0), forKey: "inputBVector")
-                scale.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-                let darkBias = min(0.07, 0.07 * shaped)
-                let bias = 0.5 - 0.5 * amp - darkBias
-                scale.setValue(CIVector(x: bias, y: bias, z: bias, w: 0), forKey: "inputBiasVector")
-                let normalized = scale.outputImage ?? sizedNoise
-                // Passo 1: Overlay
-                let overlay = CIFilter(name: "CIOverlayBlendMode")!
-                overlay.setValue(normalized, forKey: kCIInputImageKey)
-                overlay.setValue(output, forKey: kCIInputBackgroundImageKey)
-                let overOut = overlay.outputImage ?? output
-                if overlayAlpha >= 1.0 {
-                    output = overOut
-                } else if overlayAlpha > 0.0 {
-                    let mask = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: overlayAlpha)).cropped(to: output.extent)
-                    output = CIFilter(name: "CIBlendWithAlphaMask", parameters: [
-                        kCIInputImageKey: overOut,
-                        kCIInputBackgroundImageKey: output,
-                        kCIInputMaskImageKey: mask
-                    ])?.outputImage ?? overOut
-                }
-
-                // Passo 2: Linear Light (sutil)
-                let scale2 = CIFilter(name: "CIColorMatrix")!
-                let amp2 = min(1.0, 0.10 + 0.25 * shaped)
-                scale2.setValue(sizedNoise, forKey: kCIInputImageKey)
-                scale2.setValue(CIVector(x: amp2, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                scale2.setValue(CIVector(x: 0, y: amp2, z: 0, w: 0), forKey: "inputGVector")
-                scale2.setValue(CIVector(x: 0, y: 0, z: amp2, w: 0), forKey: "inputBVector")
-                scale2.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-                let darkBias2 = min(0.08, 0.08 * shaped)
-                let bias2 = 0.5 - 0.5 * amp2 - darkBias2
-                scale2.setValue(CIVector(x: bias2, y: bias2, z: bias2, w: 0), forKey: "inputBiasVector")
-                let normalized2 = scale2.outputImage ?? sizedNoise
-                let lin = CIFilter(name: "CILinearLightBlendMode")!
-                lin.setValue(normalized2, forKey: kCIInputImageKey)
-                lin.setValue(output, forKey: kCIInputBackgroundImageKey)
-                let linOut = lin.outputImage ?? output
-                let alpha2 = min(1.0, overlayAlpha * 0.45)
-                if alpha2 >= 1.0 {
-                    output = linOut
-                } else if alpha2 > 0.0 {
-                    let mask2 = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: alpha2)).cropped(to: output.extent)
-                    output = CIFilter(name: "CIBlendWithAlphaMask", parameters: [
-                        kCIInputImageKey: linOut,
-                        kCIInputBackgroundImageKey: output,
-                        kCIInputMaskImageKey: mask2
-                    ])?.outputImage ?? linOut
-                }
+            if let kernel = Self.ciLumaGrainKernel, let noise = makeNoiseCIImage(extent: output.extent, grainSize: state.grainSize, seed: 0.0) {
+                // Much stronger, more responsive ramp per slider
+                let baseK = max(0.0, min(1.0, state.grain * 48.0))
+                let shaped = Float(pow(Double(baseK), 0.55))
+                let strength: Float = 0.34 * shaped
+                output = kernel.apply(extent: output.extent, arguments: [output, noise, strength]) ?? output
             }
         }
         // Render to UIImage
@@ -1234,50 +1200,22 @@ struct PhotoEditorFilters: View {
             }
         }
         
-        // Film Grain using MTI + CI noise (per-pixel noise; Overlay + LinearLight)
-        if state.grain > 0.0 {
-            // Stronger response to the same slider value
-            let baseK = max(0.0, min(1.0, state.grain * 20.0))
-            let shaped = Float(pow(Double(baseK), 0.75))
-            let extent = CGRect(origin: .zero, size: mtiImage.size)
-            if let sizedNoise = makeNoiseCIImage(extent: extent, grainSize: state.grainSize, seed: 0.0) {
-                // Normalize around 0.5 with amplitude control
-                let amp = min(1.0, Float(0.30 + 0.65 * shaped))
-                let noiseMTI = MTIImage(ciImage: sizedNoise, isOpaque: true)
-                let mat = MTIColorMatrixFilter(); mat.inputImage = noiseMTI
-                let darkBias = max(0.0, min(0.07, 0.07 * shaped))
-                mat.colorMatrix = MTIColorMatrix(
-                    matrix: simd_float4x4(diagonal: SIMD4<Float>(amp, amp, amp, 1)),
-                    bias: SIMD4<Float>(0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0.5 - 0.5 * amp - darkBias, 0)
-                )
-                let normalized = mat.outputImage ?? noiseMTI
-                // Passo 1: Overlay
-                let over = MTIBlendFilter(blendMode: .overlay)
-                over.inputImage = normalized
-                over.inputBackgroundImage = mtiImage
-                let overlayIntensity = min(1.0, shaped * 1.35)
-                over.intensity = overlayIntensity
-                over.outputAlphaType = .alphaIsOne
-                if let out = over.outputImage { mtiImage = out }
-
-                // Passo 2: Linear Light (sutil)
-                let amp2 = min(1.0, Float(0.10 + 0.25 * shaped))
-                let mat2 = MTIColorMatrixFilter(); mat2.inputImage = MTIImage(ciImage: sizedNoise, isOpaque: true)
-                mat2.colorMatrix = MTIColorMatrix(
-                    matrix: simd_float4x4(diagonal: SIMD4<Float>(amp2, amp2, amp2, 1)),
-                    bias: SIMD4<Float>(0.5 - 0.5 * amp2 - 0.05, 0.5 - 0.5 * amp2 - 0.05, 0.5 - 0.5 * amp2 - 0.05, 0)
-                )
-                let normalized2 = mat2.outputImage ?? MTIImage(ciImage: sizedNoise, isOpaque: true)
-                let lin = MTIBlendFilter(blendMode: .linearLight)
-                lin.inputImage = normalized2
-                lin.inputBackgroundImage = mtiImage
-                lin.intensity = min(1.0, overlayIntensity * 0.50)
-                lin.outputAlphaType = .alphaIsOne
-                if let out2 = lin.outputImage { mtiImage = out2 }
-            }
-        }
+        // Film Grain simplified: apply luma-preserving grain as a final CI pass after CGImage generation
         do {
-            let out = try mtiContext.makeCGImage(from: mtiImage)
+            var out = try mtiContext.makeCGImage(from: mtiImage)
+            if state.grain > 0.0, let kernel = Self.ciLumaGrainKernel {
+                let extent = CGRect(origin: .zero, size: mtiImage.size)
+                if let noise = makeNoiseCIImage(extent: extent, grainSize: state.grainSize, seed: 0.0) {
+                    let base = CIImage(cgImage: out)
+                    // Much stronger, more responsive ramp per slider
+                    let baseK = max(0.0, min(1.0, state.grain * 48.0))
+                    let shaped = Float(pow(Double(baseK), 0.55))
+                    let strength: Float = 0.34 * shaped
+                    if let composited = kernel.apply(extent: extent, arguments: [base, noise, strength]) {
+                        out = ciContext.createCGImage(composited, from: composited.extent) ?? out
+                    }
+                }
+            }
             return UIImage(cgImage: out, scale: scaled.scale, orientation: .up)
         } catch { return nil }
     }
