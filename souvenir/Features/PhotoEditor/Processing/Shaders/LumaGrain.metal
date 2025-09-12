@@ -90,3 +90,54 @@ fragment float4 lumaGrainFragment(
     half3 srgbOut = linearToSrgbH(linOut);
     return float4((float3)srgbOut, (float)hs.a);
 }
+
+// ------------------------
+// Vignette (Metal) Shader
+// ------------------------
+struct VignetteUniforms {
+    float intensity; // 0..1
+    float pad0;
+    float pad1;
+    float pad2; // 16-byte alignment
+};
+
+// Compute smooth cubic step from 0..1 (t*t*(3-2*t))
+static inline float smoothCubic(float t) {
+    t = clamp(t, 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+fragment float4 vignetteFragment(
+    LumaGrainVertexOut inV                      [[ stage_in ]],
+    texture2d<half, access::sample> inputImage  [[ texture(0) ]],
+    constant VignetteUniforms &uv               [[ buffer(0) ]]
+) {
+    constexpr sampler inputSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    float2 coord = inV.texCoord;
+    half4 hs = inputImage.sample(inputSampler, coord);
+
+    // Get image geometry
+    float w = float(inputImage.get_width());
+    float h = float(inputImage.get_height());
+    float2 p = float2(coord.x * w, coord.y * h);
+    float2 center = float2(w * 0.5, h * 0.5);
+
+    // Intensity mapping matches previous CI implementation
+    float v = clamp(uv.intensity, 0.0, 1.0);
+    float outer = 0.5 * max(w, h);
+    float innerRatio = 0.85 - 0.30 * v; // shrink inner as intensity grows
+    float inner = max(1.0, outer * innerRatio);
+
+    float d = length(p - center);
+    float t = (d - inner) / max(outer - inner, 1.0);
+    float a = smoothCubic(t); // 3t^2 - 2t^3
+
+    // Global alpha scaling
+    float edgeAlpha = 0.6 * pow(v, 0.88);
+    float alpha = clamp(a * edgeAlpha, 0.0, 1.0);
+
+    // Blend black overlay via source-over == multiply by (1 - alpha)
+    half factor = half(1.0 - alpha);
+    half3 rgb = hs.rgb * factor;
+    return float4((float3)rgb, (float)hs.a);
+}

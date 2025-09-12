@@ -1003,56 +1003,13 @@ class PhotoEditorViewModel: ObservableObject {
             finalImage = baseImageForInvert
         }
 
-        // Vignette (corrigido para centralização correta em qualquer proporção, ex: 16:9)
+        // Vignette (Metal)
         if state.vignette > 0.0 {
-            let v = max(0.0, min(1.0, state.vignette))
-            let size = finalImage.size
-            let extent = CGRect(origin: .zero, size: size)
-            let w = size.width
-            let h = size.height
-            if let radial = CIFilter(name: "CIRadialGradient") {
-                // Centro sempre geométrico independente de transformações anteriores
-                let cx = w * 0.5
-                let cy = h * 0.5
-                radial.setValue(CIVector(x: cx, y: cy), forKey: kCIInputCenterKey)
-                // Usa maior dimensão para garantir cobertura até as bordas mais longas
-                let outer = max(w, h) * 0.5
-                // Região clara diminui conforme intensidade (0.85 fraco -> 0.55 forte)
-                let innerRatio = 0.85 - 0.30 * Double(v)
-                let inner = max(1.0, outer * CGFloat(innerRatio))
-                radial.setValue(inner, forKey: "inputRadius0")
-                radial.setValue(outer, forKey: "inputRadius1")
-                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor0")
-                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1), forKey: "inputColor1")
-                if var overlay = radial.outputImage?.cropped(to: extent) {
-                    // Suaviza borda com smoothstep (3a^2 - 2a^3)
-                    if let poly = CIFilter(name: "CIColorPolynomial") {
-                        poly.setValue(overlay, forKey: kCIInputImageKey)
-                        poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputRedCoefficients")
-                        poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGreenCoefficients")
-                        poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputBlueCoefficients")
-                        poly.setValue(CIVector(x: 0, y: 0, z: 3, w: -2), forKey: "inputAlphaCoefficients")
-                        overlay = poly.outputImage ?? overlay
-                    }
-                    // Escala alpha global (menos agressivo no começo)
-                    let edgeAlpha = CGFloat(0.6 * pow(Double(v), 0.88))
-                    if let scaleA = CIFilter(name: "CIColorMatrix") {
-                        scaleA.setValue(overlay, forKey: kCIInputImageKey)
-                        scaleA.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                        scaleA.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
-                        scaleA.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
-                        scaleA.setValue(CIVector(x: 0, y: 0, z: 0, w: edgeAlpha), forKey: "inputAVector")
-                        overlay = scaleA.outputImage ?? overlay
-                    }
-                    let overlayMTI = MTIImage(ciImage: overlay, isOpaque: false)
-                    let over = MTIBlendFilter(blendMode: .normal)
-                    over.inputImage = overlayMTI
-                    over.inputBackgroundImage = finalImage
-                    over.intensity = 1
-                    over.outputAlphaType = .alphaIsOne
-                    if let out = over.outputImage { finalImage = out }
-                }
-            }
+            let vf = VignetteFilter()
+            vf.inputImage = finalImage
+            vf.intensity = state.vignette
+            vf.outputPixelFormat = .bgra8Unorm
+            if let out = vf.outputImage { finalImage = out }
         }
 
         // Film grain via MetalPetal shader before CGImage generation
@@ -1343,51 +1300,13 @@ class PhotoEditorViewModel: ObservableObject {
             finalImage = baseImageForInvert
         }
 
-        // Vignette (corrigido: centralização para qualquer aspecto / preview)
+        // Vignette (Metal)
         if state.vignette > 0.0 {
-            let v = max(0.0, min(1.0, state.vignette))
-            let size = finalImage.size
-            let extent = CGRect(origin: .zero, size: size)
-            let w = size.width
-            let h = size.height
-            if let radial = CIFilter(name: "CIRadialGradient") {
-                let cx = w * 0.5
-                let cy = h * 0.5
-                radial.setValue(CIVector(x: cx, y: cy), forKey: kCIInputCenterKey)
-                let outer = max(w, h) * 0.5
-                let innerRatio = 0.85 - 0.30 * Double(v)
-                let inner = max(1.0, outer * CGFloat(innerRatio))
-                radial.setValue(inner, forKey: "inputRadius0")
-                radial.setValue(outer, forKey: "inputRadius1")
-                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 0), forKey: "inputColor0")
-                radial.setValue(CIColor(red: 0, green: 0, blue: 0, alpha: 1), forKey: "inputColor1")
-                if var overlay = radial.outputImage?.cropped(to: extent) {
-                    if let poly = CIFilter(name: "CIColorPolynomial") {
-                        poly.setValue(overlay, forKey: kCIInputImageKey)
-                        poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputRedCoefficients")
-                        poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGreenCoefficients")
-                        poly.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputBlueCoefficients")
-                        poly.setValue(CIVector(x: 0, y: 0, z: 3, w: -2), forKey: "inputAlphaCoefficients")
-                        overlay = poly.outputImage ?? overlay
-                    }
-                    let edgeAlpha = CGFloat(0.6 * pow(Double(v), 0.88))
-                    if let scaleA = CIFilter(name: "CIColorMatrix") {
-                        scaleA.setValue(overlay, forKey: kCIInputImageKey)
-                        scaleA.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                        scaleA.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
-                        scaleA.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
-                        scaleA.setValue(CIVector(x: 0, y: 0, z: 0, w: edgeAlpha), forKey: "inputAVector")
-                        overlay = scaleA.outputImage ?? overlay
-                    }
-                    let overlayMTI = MTIImage(ciImage: overlay, isOpaque: false)
-                    let over = MTIBlendFilter(blendMode: .normal)
-                    over.inputImage = overlayMTI
-                    over.inputBackgroundImage = finalImage
-                    over.intensity = 1
-                    over.outputAlphaType = .alphaIsOne
-                    if let out = over.outputImage { finalImage = out }
-                }
-            }
+            let vf = VignetteFilter()
+            vf.inputImage = finalImage
+            vf.intensity = state.vignette
+            vf.outputPixelFormat = .bgra8Unorm
+            if let out = vf.outputImage { finalImage = out }
         }
 
         // Geração final do preview (sem duotone)
