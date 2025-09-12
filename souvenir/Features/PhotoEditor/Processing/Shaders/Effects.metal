@@ -107,6 +107,105 @@ static inline float smoothCubic(float t) {
     return t * t * (3.0 - 2.0 * t);
 }
 
+// ------------------------
+// Duotone (Metal) Shader
+// ------------------------
+// Use only scalar floats to guarantee a tightly packed 48-byte layout (12 floats)
+// to match the Swift-side Uniforms packing in DuotoneFilter.swift
+struct DuotoneUniforms {
+    float shadow_r; float shadow_g; float shadow_b; float intensity; // 16 bytes
+    float highlight_r; float highlight_g; float highlight_b; float factor; // 16 bytes
+    float gamma; float pad0; float pad1; float pad2; // 16 bytes
+};
+
+fragment float4 duotoneFragment(
+    LumaGrainVertexOut inV                      [[ stage_in ]],
+    texture2d<half, access::sample> inputImage  [[ texture(0) ]],
+    constant DuotoneUniforms &u                 [[ buffer(0) ]]
+) {
+    constexpr sampler inputSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    half4 hs = inputImage.sample(inputSampler, inV.texCoord);
+
+    // Work in linear
+    float3 lin = srgbToLinearH(hs.rgb);
+    float3 shadowLin    = srgbToLinearH(half3(u.shadow_r, u.shadow_g, u.shadow_b));
+    float3 highlightLin = srgbToLinearH(half3(u.highlight_r, u.highlight_g, u.highlight_b));
+
+    // Perceptual luminance
+    const float3 w = float3(0.2126, 0.7152, 0.0722);
+    float Y = clamp(dot(lin, w), 0.0, 1.0);
+    float g = max(u.gamma, 0.01);
+    float t = pow(Y, g);
+
+    // Map luminance to gradient between shadow/highlight colors
+    float3 dtLin = mix(shadowLin, highlightLin, t);
+    float blend = clamp(u.intensity * u.factor, 0.0, 1.0);
+    float3 outLin = mix(lin, dtLin, blend);
+
+    half3 outSRGB = linearToSrgbH(outLin);
+    return float4((float3)outSRGB, (float)hs.a);
+}
+
+// ------------------------
+// Skin Tone Adjust (Metal) Shader
+// Positive amount warms, negative cools, selectively on skin-like pixels.
+// ------------------------
+struct SkinToneUniforms {
+    float amount;              // -1..1
+    float softness;            // 0..1, edge softness around mask
+    float highlightProtect;    // 0..1, reduce effect near highlights
+    float saturationThreshold; // 0..1, ignore very desaturated
+};
+
+static inline float3 rgbToYCbCr601(float3 rgb) {
+    // Assumes rgb is linear 0..1
+    float Y  = dot(rgb, float3(0.299, 0.587, 0.114));
+    float Cb = (rgb.b - Y) * 0.564 + 0.5;
+    float Cr = (rgb.r - Y) * 0.713 + 0.5;
+    return float3(Y, Cb, Cr);
+}
+
+fragment float4 skinToneFragment(
+    LumaGrainVertexOut inV                      [[ stage_in ]],
+    texture2d<half, access::sample> inputImage  [[ texture(0) ]],
+    constant SkinToneUniforms &u                [[ buffer(0) ]]
+) {
+    constexpr sampler inputSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    half4 hs = inputImage.sample(inputSampler, inV.texCoord);
+    float3 lin = srgbToLinearH(hs.rgb);
+
+    // YCbCr mask for skin-like region (loose ellipse in CbCr space)
+    float3 ycbcr = rgbToYCbCr601(lin);
+    float Cb = ycbcr.y; float Cr = ycbcr.z;
+    // Ellipse centered roughly at typical skin chroma (Cb~0.45, Cr~0.55)
+    float2 d = float2((Cb - 0.45) / 0.18, (Cr - 0.55) / 0.12);
+    float dist2 = dot(d, d);
+    float maskEllipse = 1.0 - smoothstep(1.0 - 0.25 * u.softness, 1.0 + 0.25 * u.softness, dist2);
+
+    // Gate by luminance and saturation to avoid highlights and grays
+    const float3 w = float3(0.2126, 0.7152, 0.0722);
+    float Y = clamp(dot(lin, w), 0.0, 1.0);
+    float maxc = max(lin.r, max(lin.g, lin.b));
+    float minc = min(lin.r, min(lin.g, lin.b));
+    float sat = (maxc > 0.0) ? (maxc - minc) / maxc : 0.0;
+
+    float maskSat = smoothstep(u.saturationThreshold, u.saturationThreshold + 0.15, sat);
+    float highlightMask = 1.0 - smoothstep(0.8 - 0.2 * u.highlightProtect, 1.0, Y);
+
+    float mask = clamp(maskEllipse * maskSat * highlightMask, 0.0, 1.0);
+
+    // Temperature-like bias in linear space
+    float amt = clamp(u.amount, -1.0, 1.0);
+    float k = pow(abs(amt), 0.85);
+    float3 biasWarm  = float3( 0.050,  0.020, -0.035) * k; // +R +G -B
+    float3 biasCool  = float3(-0.030, -0.010,  0.045) * k; // -R -G +B
+    float3 bias = (amt >= 0.0) ? biasWarm : biasCool;
+
+    float3 outLin = clamp(lin + bias * mask, 0.0, 1.0);
+    half3 outSRGB = linearToSrgbH(outLin);
+    return float4((float3)outSRGB, (float)hs.a);
+}
+
 fragment float4 vignetteFragment(
     LumaGrainVertexOut inV                      [[ stage_in ]],
     texture2d<half, access::sample> inputImage  [[ texture(0) ]],

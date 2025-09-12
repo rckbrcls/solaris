@@ -925,25 +925,15 @@ struct PhotoEditorFilters: View {
         }
         if state.colorTint.x > 0 || state.colorTint.y > 0 || state.colorTint.z > 0 {
             if state.isDualToneActive && (state.colorTintSecondary.x > 0 || state.colorTintSecondary.y > 0 || state.colorTintSecondary.z > 0) {
-                let gray = MTIColorMatrixFilter(); gray.inputImage = mtiImage
-                let grayscaleMatrix = simd_float4x4(
-                    SIMD4<Float>(0.299, 0.299, 0.299, 0),
-                    SIMD4<Float>(0.587, 0.587, 0.587, 0),
-                    SIMD4<Float>(0.114, 0.114, 0.114, 0),
-                    SIMD4<Float>(0, 0, 0, 1)
-                )
-                gray.colorMatrix = MTIColorMatrix(matrix: grayscaleMatrix, bias: SIMD4<Float>(0, 0, 0, 0))
-                guard let grayImg = gray.outputImage else { return nil }
-                let intensity = max(0, min(1, state.colorTintIntensity))
-                let factor = max(0, min(1, state.colorTintFactor))
-                let shadow = MTIImage(color: MTIColor(red: state.colorTint.x, green: state.colorTint.y, blue: state.colorTint.z, alpha: 1), sRGB: false, size: grayImg.size)
-                let mul = MTIBlendFilter(blendMode: .multiply); mul.inputImage = shadow; mul.inputBackgroundImage = grayImg; mul.intensity = factor * intensity
-                guard let mulImg = mul.outputImage else { return nil }
-                let hi = MTIImage(color: MTIColor(red: state.colorTintSecondary.x, green: state.colorTintSecondary.y, blue: state.colorTintSecondary.z, alpha: 1), sRGB: false, size: grayImg.size)
-                let scr = MTIBlendFilter(blendMode: .screen); scr.inputImage = hi; scr.inputBackgroundImage = mulImg; scr.intensity = factor * intensity * 0.7
-                guard let duo = scr.outputImage else { return nil }
-                let fin = MTIBlendFilter(blendMode: .normal); fin.inputImage = duo; fin.inputBackgroundImage = mtiImage; fin.intensity = factor * intensity
-                if let o = fin.outputImage { mtiImage = o }
+                let f = DuotoneFilter()
+                f.inputImage = mtiImage
+                f.shadowColor = SIMD3<Float>(state.colorTint.x, state.colorTint.y, state.colorTint.z)
+                f.highlightColor = SIMD3<Float>(state.colorTintSecondary.x, state.colorTintSecondary.y, state.colorTintSecondary.z)
+                f.intensity = max(0, min(1, state.colorTintIntensity))
+                f.factor = max(0, min(1, state.colorTintFactor))
+                f.gamma = 1.0
+                f.outputPixelFormat = .bgra8Unorm
+                if let o = f.outputImage { mtiImage = o }
             } else {
                 let neutral: Float = 0.5
                 let intensity = max(0, min(1, state.colorTintIntensity))
@@ -955,6 +945,17 @@ struct PhotoEditorFilters: View {
                 mat.colorMatrix = MTIColorMatrix(matrix: simd_float4x4(diagonal: SIMD4<Float>(1,1,1,1)), bias: SIMD4<Float>(biasR, biasG, biasB, 0))
                 if let o = mat.outputImage { mtiImage = o }
             }
+        }
+        // Skin tone (thumbnail) via shader for parity with preview/final
+        if abs(state.skinTone) > 0.001 {
+            let st = SkinToneFilter()
+            st.inputImage = mtiImage
+            st.amount = state.skinTone
+            st.softness = 0.6
+            st.highlightProtect = 0.6
+            st.saturationThreshold = 0.06
+            st.outputPixelFormat = .bgra8Unorm
+            if let o = st.outputImage { mtiImage = o }
         }
         // Vignette (Metal)
         if state.vignette > 0.0 {
