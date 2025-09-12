@@ -112,7 +112,7 @@ struct ContentView: View {
             }
             .onAppear {
                 guard !didInitialLoad else { return }
-                busyTitle = "Carregando fotos..."
+                busyTitle = "Loading photos..."
                 isBusy = true
                 DispatchQueue.global(qos: .userInitiated).async {
                     loadPhotos()
@@ -124,7 +124,7 @@ struct ContentView: View {
             }
             .fullScreenCover(isPresented: $showCamera) {
                 PhotoCaptureView(onPhotoCaptured: { photo in
-                    busyTitle = "Salvando foto..."
+                            busyTitle = "Saving photo..."
                     isBusy = true
                     DispatchQueue.global(qos: .userInitiated).async {
                         let lib = PhotoLibrary.shared
@@ -172,7 +172,7 @@ struct ContentView: View {
                     // Para preservar qualidade SEMPRE, o processamento em alta deve usar SEMPRE o original da câmera
                     PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", initialEditState: initialEditState, initialHistory: rec.editHistory ?? []) { finalImage, editState, history, didSave in
                         if didSave, let finalImage, let editState {
-                            busyTitle = "Salvando edição..."
+                            busyTitle = "Saving edit..."
                             isBusy = true
                             DispatchQueue.global(qos: .userInitiated).async {
                                 let lib = PhotoLibrary.shared
@@ -314,7 +314,7 @@ struct ContentView: View {
         let rec = photos[index].record
         // Sempre usar o ORIGINAL para montar o preview do editor
         let baseURL = rec.originalURL
-        busyTitle = "Abrindo..."
+        busyTitle = "Opening..."
         isBusy = true
         DispatchQueue.global(qos: .userInitiated).async {
             let data = (try? Data(contentsOf: baseURL)) ?? Data()
@@ -329,7 +329,7 @@ struct ContentView: View {
 
     // MARK: - Import com política escolhida
     func processImport(items: [PhotosPickerItem], rawHandling: RawHandlingChoice) {
-        busyTitle = "Importando fotos..."
+        busyTitle = "Importing photos..."
         isBusy = true
         DispatchQueue.global(qos: .userInitiated).async {
             let lib = PhotoLibrary.shared

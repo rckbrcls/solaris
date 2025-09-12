@@ -245,7 +245,7 @@ private extension PhotoEditorView {
                     adjustmentsContainer(geometry: geometry)
                 }
             }
-            LoadingOverlay(isVisible: $isSaving, title: "Salvando edição...")
+            LoadingOverlay(isVisible: $isSaving, title: "Saving edit...")
             topControls
             // Custom Save/Discard overlay
             if showSaveDiscardModal { saveDiscardOverlay }
@@ -341,9 +341,9 @@ private extension PhotoEditorView {
                 }
             // Card
             VStack(spacing: 14) {
-                Text("Salvar alterações?")
+                Text("Save changes?")
                     .font(.headline)
-                Text("Você deseja salvar as alterações feitas nesta edição?")
+                Text("Do you want to save the changes to this edit?")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -354,7 +354,7 @@ private extension PhotoEditorView {
                             performSaveAndExit()
                         }
                     }) {
-                        Text("Salvar")
+                        Text("Save")
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -370,7 +370,7 @@ private extension PhotoEditorView {
                             dismiss()
                         }
                     }) {
-                        Text("Descartar")
+                        Text("Discard")
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -383,7 +383,7 @@ private extension PhotoEditorView {
                             showSaveDiscardModal = false
                         }
                     }) {
-                        Text("Cancelar")
+                        Text("Cancel")
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)

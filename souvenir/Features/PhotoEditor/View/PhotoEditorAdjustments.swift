@@ -218,20 +218,20 @@ struct PhotoEditorAdjustments: View {
     }
 
     let adjustments: [Adjustment] = [
-        Adjustment(id: "contrast", label: "Contraste", icon: "circle.lefthalf.fill"),
-        Adjustment(id: "brightness", label: "Brilho", icon: "sun.max"),
-        Adjustment(id: "exposure", label: "Exposição", icon: "sunrise"),
-        Adjustment(id: "saturation", label: "Saturação", icon: "drop"),
-        Adjustment(id: "vibrance", label: "Vibrance", icon: "waveform.path.ecg"),
-        Adjustment(id: "fade", label: "Fade", icon: "aqi.medium"),
+        Adjustment(id: "contrast", label: "Contrast", icon: "circle.lefthalf.fill"),
+        Adjustment(id: "brightness", label: "Brightness", icon: "sun.max"),
+        Adjustment(id: "exposure", label: "Exposure", icon: "plusminus.circle"),
+        Adjustment(id: "saturation", label: "Saturation", icon: "drop"),
+        Adjustment(id: "vibrance", label: "Vibrance", icon: "sparkles"),
+        Adjustment(id: "fade", label: "Fade", icon: "cloud.fog"),
         Adjustment(id: "vignette", label: "Vignette", icon: "camera.aperture"),
-        Adjustment(id: "grain", label: "Grão (Film)", icon: "circle.grid.cross"),
-        Adjustment(id: "sharpen", label: "Nitidez", icon: "wand.and.stars"),
-        Adjustment(id: "clarity", label: "Clareza", icon: "circle.lefthalf.filled.inverse"),
-        Adjustment(id: "colorInvert", label: "Inverter", icon: "circle.righthalf.filled"),
-        Adjustment(id: "pixelateAmount", label: "Pixelizar", icon: "rectangle.split.3x3"),
-        Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette")
-    ,Adjustment(id: "skinTone", label: "Tom Pele", icon: "person.crop.circle")
+        Adjustment(id: "grain", label: "Film Grain", icon: "circle.grid.cross"),
+        Adjustment(id: "sharpen", label: "Sharpen", icon: "wand.and.stars"),
+        Adjustment(id: "clarity", label: "Clarity", icon: "viewfinder.circle"),
+        Adjustment(id: "colorInvert", label: "Invert", icon: "arrow.triangle.2.circlepath"),
+        Adjustment(id: "pixelateAmount", label: "Pixelate", icon: "rectangle.split.3x3"),
+        Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette"),
+        Adjustment(id: "skinTone", label: "Skin Tone", icon: "person.crop.circle")
     ]
 
     private func isAdjustmentActive(_ id: String) -> Bool {
