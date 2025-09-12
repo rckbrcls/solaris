@@ -83,9 +83,19 @@ struct PhotoEditorView: View {
         .onAppear {
             viewModel.editState = initialEditState
             viewModel.loadPersistentUndoHistory(initialHistory)
+            // Ensure hasChanges reflects both slider edits and base filter application
+            let defaultBase = PhotoEditState()
+            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != defaultBase)
         }
-        .onChange(of: viewModel.editState) { newValue in
-            hasChanges = (newValue != initialEditState)
+        .onChange(of: viewModel.editState) { _ in
+            // Consider base filter changes as edits that require save/discard
+            let defaultBase = PhotoEditState()
+            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != defaultBase)
+        }
+        .onChange(of: viewModel.baseFilterState) { _ in
+            // Tapping a filter (baseFilterState) should also trigger save/discard
+            let defaultBase = PhotoEditState()
+            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != defaultBase)
         }
         .onPreferenceChange(EditorAdjustmentsHeightKey.self) { h in
             withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
