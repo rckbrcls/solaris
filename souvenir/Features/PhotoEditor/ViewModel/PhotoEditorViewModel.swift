@@ -8,11 +8,9 @@
 import SwiftUI
 import Combine
 import UIKit
-import CoreImage
 import MetalPetal
 import os.log
 import CoreGraphics
-import CoreImage.CIFilterBuiltins
 
 struct PhotoEditState: Codable, Equatable {
     var contrast: Float = 1.0
@@ -73,7 +71,6 @@ class PhotoEditorViewModel: ObservableObject {
     private var interactionStartState: CompleteEditState? = nil // Estado no início da interação (para verificar se houve mudanças)
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
-    private static let ciContext = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
     public var previewBase: UIImage?
     private var previewBaseHigh: UIImage?
     private var previewBaseLow: UIImage?

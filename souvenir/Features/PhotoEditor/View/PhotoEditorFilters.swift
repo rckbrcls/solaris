@@ -1,6 +1,4 @@
 import SwiftUI
-import CoreImage
-import CoreImage.CIFilterBuiltins
 import UIKit
 import MetalPetal
 
@@ -49,7 +47,6 @@ struct PhotoEditorFilters: View {
     enum Stage { case groups, presets }
 
     @State private var thumbs: [String: UIImage] = [:]
-    private let ciContext = CIContext(options: [CIContextOption.useSoftwareRenderer: false])
     private let mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
 
     // Metal-only; removed CI kernels for grain.
@@ -896,104 +893,8 @@ struct PhotoEditorFilters: View {
     }
 
     private func renderThumbnail(from image: UIImage, with state: PhotoEditState, maxSize: CGFloat) -> UIImage? {
-        if let metal = renderThumbnailMetalPetal(from: image, with: state, maxSize: maxSize) {
-            return metal
-        }
-        let scaled = downscale(image: image, maxSide: Int(maxSize))
-        guard let base = scaled, let ci = CIImage(image: base) else { return nil }
-        var output: CIImage = ci
-        // Saturation/Brightness/Contrast
-        if let f = CIFilter(name: "CIColorControls") {
-            f.setValue(output, forKey: kCIInputImageKey)
-            f.setValue(state.saturation as NSNumber, forKey: kCIInputSaturationKey)
-            f.setValue(state.brightness as NSNumber, forKey: kCIInputBrightnessKey)
-            f.setValue(state.contrast as NSNumber, forKey: kCIInputContrastKey)
-            if let o = f.outputImage { output = o }
-        }
-        // Vibrance
-        if state.vibrance != 0.0, let f = CIFilter(name: "CIVibrance") {
-            f.setValue(output, forKey: kCIInputImageKey)
-            f.setValue(state.vibrance as NSNumber, forKey: "inputAmount")
-            if let o = f.outputImage { output = o }
-        }
-        // Exposure
-        if state.exposure != 0.0, let f = CIFilter(name: "CIExposureAdjust") {
-            f.setValue(output, forKey: kCIInputImageKey)
-            f.setValue(state.exposure as NSNumber, forKey: kCIInputEVKey)
-            if let o = f.outputImage { output = o }
-        }
-        // Fade (elevação dos pretos): out = in*(1-f) + f
-        if state.fade > 0.0, let f = CIFilter(name: "CIColorMatrix") {
-            let k = CGFloat(0.35) * CGFloat(max(0.0, min(1.0, state.fade)))
-            f.setValue(output, forKey: kCIInputImageKey)
-            f.setValue(CIVector(x: 1 - k, y: 0, z: 0, w: 0), forKey: "inputRVector")
-            f.setValue(CIVector(x: 0, y: 1 - k, z: 0, w: 0), forKey: "inputGVector")
-            f.setValue(CIVector(x: 0, y: 0, z: 1 - k, w: 0), forKey: "inputBVector")
-            f.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-            f.setValue(CIVector(x: k, y: k, z: k, w: 0), forKey: "inputBiasVector")
-            if let o = f.outputImage { output = o }
-        }
-        // Color tint (approx via bias)
-        if state.colorTint.x > 0 || state.colorTint.y > 0 || state.colorTint.z > 0 {
-            if let f = CIFilter(name: "CIColorMatrix") {
-                f.setValue(output, forKey: kCIInputImageKey)
-                let neutral: Float = 0.5
-                let intensity = max(0, min(1, state.colorTintIntensity))
-                let factor = max(0, min(1, state.colorTintFactor))
-                let biasR = (state.colorTint.x - neutral) * factor * intensity
-                let biasG = (state.colorTint.y - neutral) * factor * intensity
-                let biasB = (state.colorTint.z - neutral) * factor * intensity
-                f.setValue(CIVector(x: 1, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                f.setValue(CIVector(x: 0, y: 1, z: 0, w: 0), forKey: "inputGVector")
-                f.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputBVector")
-                f.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
-                f.setValue(CIVector(x: CGFloat(biasR), y: CGFloat(biasG), z: CGFloat(biasB), w: 0), forKey: "inputBiasVector")
-                if let o = f.outputImage { output = o }
-            }
-        }
-        // Vignette é aplicado mais abaixo usando Core Image overlay
-        // Pixelate (optional)
-        if state.pixelateAmount > 1.0, let f = CIFilter(name: "CIPixellate") {
-            f.setValue(output, forKey: kCIInputImageKey)
-            f.setValue(max(1.0, CGFloat(state.pixelateAmount)), forKey: kCIInputScaleKey)
-            if let o = f.outputImage { output = o }
-        }
-        // Sharpen (CIUnsharpMask)
-        if state.sharpen > 0.0, let f = CIFilter(name: "CIUnsharpMask") {
-            f.setValue(output, forKey: kCIInputImageKey)
-            f.setValue(NSNumber(value: Double(1.0 + 2.0 * state.sharpen)), forKey: kCIInputRadiusKey)
-            f.setValue(NSNumber(value: Double(min(max(state.sharpen, 0.0), 1.0) * 1.2)), forKey: kCIInputIntensityKey)
-            if let o = f.outputImage { output = o }
-        }
-        // Vignette (corrigido: proporcional para qualquer aspect ratio)
-        if state.vignette > 0.0 {
-            let vf = VignetteFilter()
-            vf.intensity = state.vignette
-            // Convert CI -> MTI then back after vignette
-            let mtiContext = self.mtiContext
-            if let mtiContext, let cg = ciContext.createCGImage(output, from: output.extent) {
-                var mtiImage = MTIImage(cgImage: cg, options: [.SRGB: false], isOpaque: true)
-                vf.inputImage = mtiImage
-                vf.outputPixelFormat = .bgra8Unorm
-                if let outImage = vf.outputImage {
-                    mtiImage = outImage
-                    if let back = try? mtiContext.makeCGImage(from: mtiImage) {
-                        output = CIImage(cgImage: back)
-                    }
-                }
-            }
-        }
-        // Invert
-        if state.colorInvert > 0.0, let f = CIFilter(name: "CIColorInvert") {
-            f.setValue(output, forKey: kCIInputImageKey)
-            if let o = f.outputImage { output = o }
-        }
-        // Film Grain removed from CI path; MetalPetal path below applies grain.
-        // Render to UIImage
-        if let cg = ciContext.createCGImage(output, from: output.extent) {
-            return UIImage(cgImage: cg, scale: base.scale, orientation: .up)
-        }
-        return nil
+        // MetalPetal-only thumbnails (remove Core Image fallback)
+        return renderThumbnailMetalPetal(from: image, with: state, maxSize: maxSize)
     }
 
     private func renderThumbnailMetalPetal(from image: UIImage, with state: PhotoEditState, maxSize: CGFloat) -> UIImage? {

@@ -1,9 +1,6 @@
 import UIKit
-import CoreImage
-import CoreImage.CIFilterBuiltins
 
 struct PhotoEditorHelper {
-    static let sharedCIContext = CIContext()
     
     /// Returns a suggested max preview size in points to keep the image sharp
     /// up to the configured double-tap zoom level (default 3x) on the current device.
