@@ -52,78 +52,7 @@ struct PhotoEditorFilters: View {
     private let ciContext = CIContext(options: [CIContextOption.useSoftwareRenderer: false])
     private let mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
 
-    // Per-pixel grain kernel to avoid resampling artifacts
-    private static let ciGrainKernel: CIColorKernel? = {
-        let src = """
-        kernel vec4 grainNoise(__sample s, float seed) {
-            vec2 p = destCoord();
-            float n1 = fract(sin(dot(p + vec2(seed*19.19, seed*27.13), vec2(12.9898,78.233))) * 43758.5453);
-            float n2 = fract(sin(dot(p*1.97 + vec2(seed*3.31, seed*1.73), vec2(39.3467,11.1351))) * 37534.5453);
-            float n3 = fract(sin(dot(p*2.53 + vec2(seed*7.07, seed*5.41), vec2(73.1562,91.3458))) * 31514.8723);
-            float n = (n1*0.62 + n2*0.28 + n3*0.10);
-            return vec4(n, n, n, 1.0);
-        }
-        """
-        return CIColorKernel(source: src)
-    }()
-
-    // Luma-preserving grain (single pass): adjusts only luminance, keeps chroma.
-    private static let ciLumaGrainKernel: CIColorKernel? = {
-        let src = """
-        vec3 srgbToLinear(vec3 c) {
-            vec3 low  = c / 12.92;
-            vec3 high = pow((c + 0.055) / 1.055, vec3(2.4));
-            vec3 cond = step(vec3(0.04045), c);
-            return mix(low, high, cond);
-        }
-        vec3 linearToSrgb(vec3 c) {
-            vec3 low  = 12.92 * c;
-            vec3 high = 1.055 * pow(max(c, 0.0), vec3(1.0/2.4)) - vec3(0.055);
-            vec3 cond = step(vec3(0.0031308), c);
-            return mix(low, high, cond);
-        }
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
-        }
-        float grainNoise(vec2 p, float baseFreq, float seed) {
-            vec2 o1 = vec2(seed*19.19, seed*27.13);
-            vec2 o2 = vec2(seed*3.31,  seed*1.73);
-            vec2 o3 = vec2(seed*7.07,  seed*5.41);
-            float n1 = hash(p*baseFreq + o1);
-            float n2 = hash(p*baseFreq*1.97 + o2);
-            float n3 = hash(p*baseFreq*2.53 + o3);
-            return (n1*0.62 + n2*0.28 + n3*0.10) - 0.5;
-        }
-        kernel vec4 lumaGrain(__sample s, float strength, float size, float seed) {
-            vec2 p = destCoord();
-            float baseFreq = mix(2.4, 0.7, clamp(size, 0.0, 1.0));
-            float n = grainNoise(p, baseFreq, seed);
-            vec3 lin = srgbToLinear(s.rgb);
-            const vec3 w = vec3(0.2126, 0.7152, 0.0722);
-            float Y = dot(lin, w);
-            float Yp = clamp(Y + strength * n, 0.0, 1.0);
-            vec3 linOut = clamp(lin + (Yp - Y) * w, 0.0, 1.0);
-            vec3 srgbOut = linearToSrgb(linOut);
-            return vec4(srgbOut, s.a);
-        }
-        """
-        return CIColorKernel(source: src)
-    }()
-
-    // Build noise at target resolution with Gaussian sizing (no scaling)
-    private func makeNoiseCIImage(extent: CGRect, grainSize: Float, seed: Float = 0.0) -> CIImage? {
-        guard let kernel = Self.ciGrainKernel else { return nil }
-        let dummy = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1)).cropped(to: extent)
-        guard var noise = kernel.apply(extent: extent, arguments: [dummy, seed]) else { return nil }
-        let r = CGFloat(max(0.0, min(1.0, grainSize))) * 6.0
-        if r > 0.0 {
-            let blur = CIFilter.gaussianBlur()
-            blur.inputImage = noise
-            blur.radius = Float(r)
-            noise = (blur.outputImage ?? noise).cropped(to: extent)
-        }
-        return noise
-    }
+    // Metal-only; removed CI kernels for grain.
 
     private var classicsPresets: [FilterPreset] {
         [
@@ -1082,10 +1011,7 @@ struct PhotoEditorFilters: View {
             f.setValue(output, forKey: kCIInputImageKey)
             if let o = f.outputImage { output = o }
         }
-        // Film Grain (simple, luma-preserving kernel, noise computed in-kernel)
-        if state.grain > 0.0 {
-            output = LumaGrain.apply(to: output, grain: state.grain, grainSize: state.grainSize, seed: 0.0)
-        }
+        // Film Grain removed from CI path; MetalPetal path below applies grain.
         // Render to UIImage
         if let cg = ciContext.createCGImage(output, from: output.extent) {
             return UIImage(cgImage: cg, scale: base.scale, orientation: .up)
@@ -1218,12 +1144,17 @@ struct PhotoEditorFilters: View {
             }
         }
         
-        // Film Grain simplified: apply luma-preserving grain as a final CI pass after CGImage generation
+        // Film Grain via MetalPetal shader before CGImage generation
         do {
-            var out = try mtiContext.makeCGImage(from: mtiImage)
             if state.grain > 0.0 {
-                out = LumaGrain.applyToCGImage(out, grain: state.grain, grainSize: state.grainSize, seed: 0.0)
+                let f = LumaGrainFilter()
+                f.inputImage = mtiImage
+                f.grain = state.grain
+                f.grainSize = state.grainSize
+                f.outputPixelFormat = .bgra8Unorm
+                if let outImage = f.outputImage { mtiImage = outImage } else { print("[Thumbnails] LumaGrainFilter produced nil output.") }
             }
+            let out = try mtiContext.makeCGImage(from: mtiImage)
             return UIImage(cgImage: out, scale: scaled.scale, orientation: .up)
         } catch { return nil }
     }

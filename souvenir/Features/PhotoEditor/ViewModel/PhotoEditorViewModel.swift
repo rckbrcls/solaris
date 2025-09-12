@@ -74,88 +74,6 @@ class PhotoEditorViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var mtiContext: MTIContext? = try? MTIContext(device: MTLCreateSystemDefaultDevice()!)
     private static let ciContext = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
-    // CI kernel para gerar ruído per-pixel (3 oitavas) evitando padrões de reamostragem
-    private static let ciGrainKernel: CIColorKernel? = {
-        let src = """
-        kernel vec4 grainNoise(__sample s, float seed) {
-            vec2 p = destCoord();
-            // Hash-based white noise, 3 octaves para evitar padrões perceptíveis
-            float n1 = fract(sin(dot(p + vec2(seed*19.19, seed*27.13), vec2(12.9898,78.233))) * 43758.5453);
-            float n2 = fract(sin(dot(p*1.97 + vec2(seed*3.31, seed*1.73), vec2(39.3467,11.1351))) * 37534.5453);
-            float n3 = fract(sin(dot(p*2.53 + vec2(seed*7.07, seed*5.41), vec2(73.1562,91.3458))) * 31514.8723);
-            float n = (n1*0.62 + n2*0.28 + n3*0.10);
-            return vec4(n, n, n, 1.0);
-        }
-        """
-        return CIColorKernel(source: src)
-    }()
-
-    // Luma-preserving grain: single-pass kernel computes noise internally (fast, no extra textures)
-    private static let ciLumaGrainKernel: CIColorKernel? = {
-        let src = """
-        vec3 srgbToLinear(vec3 c) {
-            vec3 low  = c / 12.92;
-            vec3 high = pow((c + 0.055) / 1.055, vec3(2.4));
-            vec3 cond = step(vec3(0.04045), c);
-            return mix(low, high, cond);
-        }
-        vec3 linearToSrgb(vec3 c) {
-            vec3 low  = 12.92 * c;
-            vec3 high = 1.055 * pow(max(c, 0.0), vec3(1.0/2.4)) - vec3(0.055);
-            vec3 cond = step(vec3(0.0031308), c);
-            return mix(low, high, cond);
-        }
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453);
-        }
-        // 3-octave noise, size-controlled by base frequency
-        float grainNoise(vec2 p, float baseFreq, float seed) {
-            vec2 o1 = vec2(seed*19.19, seed*27.13);
-            vec2 o2 = vec2(seed*3.31,  seed*1.73);
-            vec2 o3 = vec2(seed*7.07,  seed*5.41);
-            float n1 = hash(p*baseFreq + o1);
-            float n2 = hash(p*baseFreq*1.97 + o2);
-            float n3 = hash(p*baseFreq*2.53 + o3);
-            return (n1*0.62 + n2*0.28 + n3*0.10) - 0.5; // zero-mean
-        }
-        kernel vec4 lumaGrain(__sample s, float strength, float size, float seed) {
-            vec2 p = destCoord();
-            // Map size: 0 (fine, high freq) -> 1 (coarse, low freq)
-            float baseFreq = mix(2.4, 0.7, clamp(size, 0.0, 1.0));
-            float n = grainNoise(p, baseFreq, seed);
-            vec3 lin = srgbToLinear(s.rgb);
-            const vec3 w = vec3(0.2126, 0.7152, 0.0722);
-            float Y = dot(lin, w);
-            float Yp = clamp(Y + strength * n, 0.0, 1.0);
-            vec3 linOut = clamp(lin + (Yp - Y) * w, 0.0, 1.0);
-            vec3 srgbOut = linearToSrgb(linOut);
-            return vec4(srgbOut, s.a);
-        }
-        """
-        return CIColorKernel(source: src)
-    }()
-
-    // Apply luma-preserving grain using a single CIColorKernel, then return CGImage
-    private func applyLumaPreservingGrainCI(to cgImage: CGImage, size: CGSize, state: PhotoEditState) -> CGImage? {
-        guard state.grain > 0 else { return cgImage }
-        return LumaGrain.applyToCGImage(cgImage, grain: state.grain, grainSize: state.grainSize, seed: 0.0)
-    }
-
-    // Gera um CIImage de ruído no tamanho alvo, com controle de tamanho via blur gaussiano
-    private func makeNoiseCIImage(extent: CGRect, grainSize: Float, seed: Float = 0.0) -> CIImage? {
-        guard let kernel = Self.ciGrainKernel else { return nil }
-        let dummy = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1)).cropped(to: extent)
-        guard var noise = kernel.apply(extent: extent, arguments: [dummy, seed]) else { return nil }
-        // Ajuste de tamanho do grão via blur (evita artefatos de linhas de reamostragem)
-        let r = CGFloat(max(0.0, min(1.0, grainSize))) * 6.0
-        if r > 0.0 {
-            let blur = CIFilter.gaussianBlur()
-            blur.inputImage = noise
-            blur.radius = Float(r)
-            noise = (blur.outputImage ?? noise).cropped(to: extent)
-        }
-        return noise
-    }
     public var previewBase: UIImage?
     private var previewBaseHigh: UIImage?
     private var previewBaseLow: UIImage?
@@ -1137,14 +1055,21 @@ class PhotoEditorViewModel: ObservableObject {
             }
         }
 
-        // Film grain moved to a CI linear-space composite step after CGImage generation
+        // Film grain via MetalPetal shader before CGImage generation
         do {
-            var cgimg = try mtiContext.makeCGImage(from: finalImage)
             if state.grain > 0.0 {
-                if let out = self.applyLumaPreservingGrainCI(to: cgimg, size: finalImage.size, state: state) {
-                    cgimg = out
+                let f = LumaGrainFilter()
+                f.inputImage = finalImage
+                f.grain = state.grain
+                f.grainSize = state.grainSize
+                f.outputPixelFormat = .bgra8Unorm
+                if let out = f.outputImage {
+                    finalImage = out
+                } else {
+                    os_log("[PhotoEditorViewModel] LumaGrainFilter produced nil output (Metal shader not available).")
                 }
             }
+            let cgimg = try mtiContext.makeCGImage(from: finalImage)
             let uiImage = UIImage(cgImage: cgimg)
             return uiImage
         } catch {
@@ -1465,16 +1390,21 @@ class PhotoEditorViewModel: ObservableObject {
             }
         }
 
-        // Film grain moved to a CI linear-space composite step after CGImage generation
-
         // Geração final do preview (sem duotone)
         do {
-            var cgimg = try mtiContext.makeCGImage(from: finalImage)
             if state.grain > 0.0 {
-                if let out = self.applyLumaPreservingGrainCI(to: cgimg, size: finalImage.size, state: state) {
-                    cgimg = out
+                let f = LumaGrainFilter()
+                f.inputImage = finalImage
+                f.grain = state.grain
+                f.grainSize = state.grainSize
+                f.outputPixelFormat = .bgra8Unorm
+                if let out = f.outputImage {
+                    finalImage = out
+                } else {
+                    os_log("[PhotoEditorViewModel] LumaGrainFilter produced nil output (Metal shader not available).")
                 }
             }
+            let cgimg = try mtiContext.makeCGImage(from: finalImage)
             let uiImage = UIImage(cgImage: cgimg)
             DispatchQueue.main.async { self.previewImage = uiImage }
             os_log("[PhotoEditorViewModel] Preview image generated successfully.")
