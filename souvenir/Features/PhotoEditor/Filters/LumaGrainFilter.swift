@@ -35,9 +35,12 @@ final class LumaGrainFilter: NSObject, MTIFilter {
     }()
 
     private func shapedStrength(from grain: Float) -> Float {
-        let baseK = max(0.0, min(1.0, grain * 48.0))
-        let shaped = pow(baseK, 0.55)
-        return 0.40 * shaped
+        // Map slider 0..0.1 -> 0..1 for better range
+        let k = max(0.0, min(1.0, grain * 10.0))
+        // Slightly sublinear for fine control at low values
+        let shaped = pow(k, 0.50)
+        // Increase max amplitude for a stronger grain
+        return 0.80 * shaped
     }
 
     var outputImage: MTIImage? {
