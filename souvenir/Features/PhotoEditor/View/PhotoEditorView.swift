@@ -47,7 +47,7 @@ struct PhotoEditorView: View {
     @State private var isSaving: Bool = false
     let namespace: Namespace.ID
     let matchedID: String
-    var onFinishEditing: ((UIImage?, PhotoEditState?, [PhotoEditState], Bool) -> Void)? // (finalImage, ajustes, historico, salvou?)
+    var onFinishEditing: ((UIImage?, PhotoEditState?, PhotoEditState?, [PhotoEditState], Bool) -> Void)? // (finalImage, ajustes, baseFiltro, historico, salvou?)
 
     @State private var zoomScale: CGFloat = 1.0
     @State private var lastZoomScale: CGFloat = 1.0
@@ -65,14 +65,16 @@ struct PhotoEditorView: View {
     @State private var showSaveDiscardContent: Bool = false
 
     private var initialEditState: PhotoEditState
+    private var initialBaseFilterState: PhotoEditState
     private var initialHistory: [PhotoEditState]
 
-    init(photo: UIImage, originalURL: URL, namespace: Namespace.ID, matchedID: String, initialEditState: PhotoEditState? = nil, initialHistory: [PhotoEditState] = [], onFinishEditing: ((UIImage?, PhotoEditState?, [PhotoEditState], Bool) -> Void)? = nil) {
+    init(photo: UIImage, originalURL: URL, namespace: Namespace.ID, matchedID: String, initialEditState: PhotoEditState? = nil, initialBaseFilterState: PhotoEditState? = nil, initialHistory: [PhotoEditState] = [], onFinishEditing: ((UIImage?, PhotoEditState?, PhotoEditState?, [PhotoEditState], Bool) -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: PhotoEditorViewModel(image: photo, originalImageURL: originalURL))
         self.namespace = namespace
         self.matchedID = matchedID
         self.onFinishEditing = onFinishEditing
         self.initialEditState = initialEditState ?? PhotoEditState()
+        self.initialBaseFilterState = initialBaseFilterState ?? PhotoEditState()
         self.initialHistory = initialHistory
     }
 
@@ -82,20 +84,18 @@ struct PhotoEditorView: View {
         .ignoresSafeArea(edges: .bottom)
         .onAppear {
             viewModel.editState = initialEditState
+            viewModel.baseFilterState = initialBaseFilterState
             viewModel.loadPersistentUndoHistory(initialHistory)
-            // Ensure hasChanges reflects both slider edits and base filter application
-            let defaultBase = PhotoEditState()
-            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != defaultBase)
+            // Ensure hasChanges reflects differences from initial states (edit + base filter)
+            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != initialBaseFilterState)
         }
         .onChange(of: viewModel.editState) { _ in
-            // Consider base filter changes as edits that require save/discard
-            let defaultBase = PhotoEditState()
-            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != defaultBase)
+            // Consider base filter changes relative to initial base
+            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != initialBaseFilterState)
         }
         .onChange(of: viewModel.baseFilterState) { _ in
-            // Tapping a filter (baseFilterState) should also trigger save/discard
-            let defaultBase = PhotoEditState()
-            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != defaultBase)
+            // Tapping a filter (baseFilterState) should also trigger save/discard relative to initial base
+            hasChanges = (viewModel.editState != initialEditState) || (viewModel.baseFilterState != initialBaseFilterState)
         }
         .onPreferenceChange(EditorAdjustmentsHeightKey.self) { h in
             withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
@@ -277,7 +277,7 @@ private extension PhotoEditorView {
                         } else {
                             // Converte CompleteEditState de volta para PhotoEditState para compatibilidade
                             let editHistory = viewModel.undoStack.map { $0.editState }
-                            onFinishEditing?(nil, nil, editHistory, false)
+                            onFinishEditing?(nil, nil, nil, editHistory, false)
                             dismiss()
                         }
                     }) {
@@ -376,7 +376,7 @@ private extension PhotoEditorView {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.23) {
                             // Converte CompleteEditState de volta para PhotoEditState para compatibilidade
                             let editHistory = viewModel.undoStack.map { $0.editState }
-                            onFinishEditing?(nil, nil, editHistory, false)
+                            onFinishEditing?(nil, nil, nil, editHistory, false)
                             dismiss()
                         }
                     }) {
@@ -424,7 +424,7 @@ private extension PhotoEditorView {
             DispatchQueue.main.async {
                 // Converte CompleteEditState de volta para PhotoEditState para compatibilidade
                 let editHistory = viewModel.undoStack.map { $0.editState }
-                onFinishEditing?(finalImage, viewModel.editState, editHistory, true)
+                onFinishEditing?(finalImage, viewModel.editState, viewModel.baseFilterState, editHistory, true)
                 viewModel.editState = initialEditState
                 isSaving = false
                 dismiss()

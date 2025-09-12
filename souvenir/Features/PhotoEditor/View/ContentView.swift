@@ -170,7 +170,7 @@ struct ContentView: View {
                     // Usa a imagem de preview que foi preparada ao tocar
                     let previewImage = selectedPhotoForEditor ?? item.image
                     // Para preservar qualidade SEMPRE, o processamento em alta deve usar SEMPRE o original da câmera
-                    PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", initialEditState: initialEditState, initialHistory: rec.editHistory ?? []) { finalImage, editState, history, didSave in
+                    PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", initialEditState: initialEditState, initialBaseFilterState: rec.baseFilterState, initialHistory: rec.editHistory ?? []) { finalImage, editState, baseFilterState, history, didSave in
                         if didSave, let finalImage, let editState {
                             busyTitle = "Saving edit..."
                             isBusy = true
@@ -204,6 +204,7 @@ struct ContentView: View {
                                 updated.editedURL = editURL
                                 updated.thumbURL = thumbURL
                                 updated.editState = editState
+                                updated.baseFilterState = baseFilterState
                                 // Limita histórico persistido para evitar manifest grande
                                 updated.editHistory = Array(history.suffix(100))
                                 if let pos = records.firstIndex(where: { $0.id == updated.id }) {

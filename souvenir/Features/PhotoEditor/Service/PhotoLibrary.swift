@@ -7,6 +7,8 @@ struct PhotoRecord: Codable, Identifiable, Equatable {
     var thumbURL: URL
     var editedURL: URL?
     var editState: PhotoEditState?
+    // Novo: persiste o filtro aplicado via TAP (baseFilterState)
+    var baseFilterState: PhotoEditState? = nil
     var editHistory: [PhotoEditState]? = nil // histórico persistente de estados anteriores
     let createdAt: Date
 }
