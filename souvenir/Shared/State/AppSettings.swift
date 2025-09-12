@@ -8,8 +8,8 @@ enum RawHandlingChoice: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .ask: return "Perguntar"
-        case .optimized: return "Otimizado"
+        case .ask: return "Ask"
+        case .optimized: return "Optimized"
         case .original: return "Original"
         }
     }
@@ -38,13 +38,13 @@ final class AppSettings: ObservableObject {
         case sRGB
         case displayP3
         var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .auto: return "Auto (igual original)"
-            case .sRGB: return "sRGB (padrão)"
-            case .displayP3: return "Display P3 (wide-gamut)"
-            }
+    var label: String {
+        switch self {
+        case .auto: return "Auto (match source)"
+        case .sRGB: return "sRGB (default)"
+        case .displayP3: return "Display P3 (wide gamut)"
         }
+    }
     }
 
     private struct StoredV1: Codable {
