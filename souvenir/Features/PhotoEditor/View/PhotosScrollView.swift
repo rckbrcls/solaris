@@ -88,9 +88,15 @@ struct PhotosScrollView<PhotoType>: View {
                         Label("Share", systemImage: "square.and.arrow.up")
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
+                            .tint(.white)
+                            .liquidGlass(
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                borderColor: Color.blue.opacity(0.2)
+                            )
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.blue.opacity(0.7))
+                            )
                     }
                     Button(action: {
                         let indicesToRemove = selectedPhotoIndices.sorted(by: >)
@@ -101,9 +107,15 @@ struct PhotosScrollView<PhotoType>: View {
                         Label("Delete", systemImage: "trash")
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.red)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
+                            .tint(.white)
+                            .liquidGlass(
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                borderColor: Color.red.opacity(0.2)
+                            )
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.red.opacity(0.75))
+                            )
                     }
                 }
                 .padding()
