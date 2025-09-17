@@ -158,11 +158,7 @@ struct RulerSlider: View {
         }
         .frame(height: sliderHeight)
         .padding(6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -370,10 +366,10 @@ private struct InvertToggle: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(colorInvert == 0.0 ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: colorInvert == 0.0 ? 2 : 1)
+                        .liquidGlass(
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                            borderColor: colorInvert == 0.0 ? Color.accentColor : Color.primary.opacity(0.08),
+                            borderLineWidth: colorInvert == 0.0 ? 2 : 1
                         )
                 }
                 .buttonStyle(.plain)
@@ -391,10 +387,10 @@ private struct InvertToggle: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(colorInvert == 1.0 ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: colorInvert == 1.0 ? 2 : 1)
+                        .liquidGlass(
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                            borderColor: colorInvert == 1.0 ? Color.accentColor : Color.primary.opacity(0.08),
+                            borderLineWidth: colorInvert == 1.0 ? 2 : 1
                         )
                 }
                 .buttonStyle(.plain)
@@ -694,11 +690,7 @@ private struct ColorTintControls: View {
                     .zIndex(1)
                 }
                 .padding(4)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
+                .liquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .zIndex(1)
                 Button(action: {
                     if colorTint.w != 0.0 || isDualToneActive {

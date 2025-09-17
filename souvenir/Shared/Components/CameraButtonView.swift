@@ -21,11 +21,7 @@ struct CameraButtonView: View {
                         speed: 1.0,
                         blur: 0.7
                     )
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: .infinity, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: .infinity, style: .continuous)
-                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                    )
+                    .liquidGlass(in: RoundedRectangle(cornerRadius: .infinity, style: .continuous))
                     .frame(width: 70, height: 70)
                     .cornerRadius(.infinity)
 

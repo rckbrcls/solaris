@@ -744,8 +744,7 @@ struct PhotoEditorFilters: View {
                             }
                             .padding(.vertical, 10)
                             .padding(.horizontal, 12)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                            .liquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
@@ -769,8 +768,7 @@ struct PhotoEditorFilters: View {
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                    .liquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 Spacer()

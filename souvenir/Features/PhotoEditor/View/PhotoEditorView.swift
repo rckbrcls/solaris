@@ -20,25 +20,20 @@ private struct EditorImageHeightKey: PreferenceKey {
 // Circular neutral icon style (match camera buttons)
 private struct EditorIconButtonStyle: ViewModifier {
     var size: CGFloat = 44
-    var background: Material = .ultraThinMaterial
     var foreground: Color = .primary
 
     func body(content: Content) -> some View {
         content
             .foregroundColor(foreground)
             .frame(width: size, height: size)
-            .background(background, in: Circle())
-            .overlay(
-                Circle()
-                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-            )
+            .liquidGlass(in: Circle(), borderColor: Color.primary.opacity(0.2))
             .contentShape(Circle())
     }
 }
 
 private extension View {
-    func editorIconStyle(size: CGFloat = 44, background: Material = .ultraThinMaterial) -> some View {
-        self.modifier(EditorIconButtonStyle(size: size, background: background))
+    func editorIconStyle(size: CGFloat = 44, foreground: Color = .primary) -> some View {
+        modifier(EditorIconButtonStyle(size: size, foreground: foreground))
     }
 }
 
@@ -239,8 +234,10 @@ private extension PhotoEditorView {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.primary.opacity(0.15), lineWidth: 1))
+            .liquidGlass(
+                in: Capsule(),
+                borderColor: Color.primary.opacity(0.15)
+            )
             .shadow(radius: 3)
             .transition(.asymmetric(insertion: .scale(scale: 0.9).combined(with: .opacity), removal: .opacity))
         }
@@ -397,16 +394,20 @@ private extension PhotoEditorView {
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.15), lineWidth: 1))
+                            .liquidGlass(
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                borderColor: Color.primary.opacity(0.15)
+                            )
                             .foregroundColor(.primary)
                     }
                 }
             }
             .padding(20)
             .frame(maxWidth: 360)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.12), lineWidth: 1))
+            .liquidGlass(
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                borderColor: Color.primary.opacity(0.12)
+            )
             .shadow(radius: 12)
             .padding(.horizontal, 24)
             .opacity(showSaveDiscardContent ? 1.0 : 0.0)

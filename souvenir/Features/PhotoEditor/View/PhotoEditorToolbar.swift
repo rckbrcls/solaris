@@ -55,17 +55,14 @@ struct CategoryButton: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, minHeight: 36)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        selectedCategory == category 
-                        ? colorSchemeManager.primaryColor.opacity(0.6)
-                        : Color.primary.opacity(0.08), 
-                        lineWidth: selectedCategory == category ? 2 : 1
-                    )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory == category)
+            .liquidGlass(
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                borderColor: selectedCategory == category
+                    ? colorSchemeManager.primaryColor.opacity(0.6)
+                    : Color.primary.opacity(0.08),
+                borderLineWidth: selectedCategory == category ? 2 : 1
             )
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory == category)
             .scaleEffect(selectedCategory == category ? 1.02 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory == category)
         }
