@@ -43,6 +43,7 @@ private struct LiquidGlassModifier<ShapeType: InsettableShape>: ViewModifier {
                     color: borderColor,
                     lineWidth: borderLineWidth
                 )
+                .contentShape(containerShape)
         } else {
             content
                 .background(.ultraThinMaterial, in: containerShape)
@@ -54,6 +55,7 @@ private struct LiquidGlassModifier<ShapeType: InsettableShape>: ViewModifier {
                 )
                 .compositingGroup()
                 .shadow(radius: 0.0001)
+                .contentShape(containerShape)
         }
     }
 }
@@ -69,6 +71,7 @@ private extension View {
         if addBorder {
             overlay(
                 shape.strokeBorder(color, lineWidth: lineWidth)
+                    .allowsHitTesting(false)
             )
         } else {
             self

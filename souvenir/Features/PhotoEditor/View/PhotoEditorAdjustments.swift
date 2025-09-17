@@ -766,6 +766,7 @@ private struct AdjustmentIconButton: View {
                     .fill(Color.black.opacity(0.65))
                     .blendMode(.overlay)
                     .opacity(isActive ? 1 : 0)
+                    .allowsHitTesting(false)
                     .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isActive)
             )
             .scaleEffect(isSelected ? 1.02 : 1.0)
