@@ -24,17 +24,13 @@ struct LoadingOverlay: View {
                 }
                 .padding(.vertical, 18)
                 .padding(.horizontal, 24)
+                .liquidGlass(
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                    borderColor: Color.white.opacity(0.15)
+                )
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.black.opacity(0.25))
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
+                        .fill(Color.black.opacity(0.25))
                 )
                 .shadow(color: .black.opacity(0.25), radius: 16, x: 0, y: 6)
             }
@@ -42,4 +38,3 @@ struct LoadingOverlay: View {
         }
     }
 }
-

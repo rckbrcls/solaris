@@ -753,29 +753,22 @@ private struct AdjustmentIconButton: View {
             }
             .padding(8)
             .frame(width: 50, height: 50)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Material.ultraThin)
-
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.black.opacity(0.65))
-                        .blendMode(.overlay)
-                        .opacity(isActive ? 1 : 0)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isActive)
-                }
+            .liquidGlass(
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous),
+                borderColor:
+                    isSelected
+                    ? colorSchemeManager.primaryColor.opacity(0.6)
+                    : Color.primary.opacity(0.08),
+                borderLineWidth: isSelected ? 2 : 1
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(
-                        isSelected
-                        ? colorSchemeManager.primaryColor.opacity(0.6)
-                        : Color.primary.opacity(0.08),
-                        lineWidth: isSelected  ? 2 : 1
-                    )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.black.opacity(0.65))
+                    .blendMode(.overlay)
+                    .opacity(isActive ? 1 : 0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isActive)
             )
-            .scaleEffect((isSelected) ? 1.02 : 1.0)
+            .scaleEffect(isSelected ? 1.02 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)

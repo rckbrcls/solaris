@@ -7,16 +7,14 @@ import UIKit  // Adicionado para garantir que UIImage está disponível
 private struct ShutterButton: View {
     var size: CGFloat = 78
     var body: some View {
-        ZStack {
-            // Outer ring (subtle)
-            Circle()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Circle().stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
-        }
-        .frame(width: size, height: size)
-        .contentShape(Circle())
+        Circle()
+            .fill(Color.clear)
+            .frame(width: size, height: size)
+            .liquidGlass(
+                in: Circle(),
+                borderColor: Color.primary.opacity(0.08)
+            )
+            .contentShape(Circle())
         .accessibilityLabel("Capturar foto")
         .accessibilityAddTraits(.isButton)
     }
@@ -34,25 +32,20 @@ private struct PressScaleStyle: ButtonStyle {
 // Estilo consistente para ícones redondos na câmera
 private struct CameraIconButtonStyle: ViewModifier {
     var size: CGFloat = 44
-    var background: Material = .ultraThinMaterial
     var foreground: Color = .primary
 
     func body(content: Content) -> some View {
         content
             .foregroundColor(foreground)
             .frame(width: size, height: size)
-            .background(background, in: Circle())
-            .overlay(
-                Circle()
-                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-            )
+            .liquidGlass(in: Circle(), borderColor: Color.primary.opacity(0.2))
             .contentShape(Circle())
     }
 }
 
 private extension View {
-    func cameraIconStyle(size: CGFloat = 44, background: Material = .ultraThinMaterial) -> some View {
-        self.modifier(CameraIconButtonStyle(size: size, background: background))
+    func cameraIconStyle(size: CGFloat = 44, foreground: Color = .primary) -> some View {
+        modifier(CameraIconButtonStyle(size: size, foreground: foreground))
     }
 }
 
@@ -310,4 +303,3 @@ extension PhotoCaptureView {
         return UIImage(cgImage: cg, scale: image.scale, orientation: .up)
     }
 }
-
