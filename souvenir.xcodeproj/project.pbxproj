@@ -13,11 +13,10 @@
 		2CB568AE2C7CB9B70027924C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2CB568AD2C7CB9B70027924C /* Assets.xcassets */; };
 		2CB568B12C7CB9B70027924C /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2CB568B02C7CB9B70027924C /* Preview Assets.xcassets */; };
 		2CB568B32C7CB9B70027924C /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568B22C7CB9B70027924C /* Persistence.swift */; };
-		2CB568B62C7CB9B70027924C /* solaris.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568B42C7CB9B70027924C /* solaris.xcdatamodeld */; };
+		2CB568D82C7CB9B80027924C /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568D72C7CB9B80027924C /* Item.swift */; };
 		2CB568C02C7CB9B70027924C /* solarisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568BF2C7CB9B70027924C /* solarisTests.swift */; };
 		2CB568CA2C7CB9B70027924C /* solarisUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568C92C7CB9B70027924C /* solarisUITests.swift */; };
 		2CB568CC2C7CB9B70027924C /* solarisUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568CB2C7CB9B70027924C /* solarisUITestsLaunchTests.swift */; };
-		2CD17E312DEA0B4D00D398A2 /* solaris.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 2CD17E272DEA0B4D00D398A2 /* solaris.xcdatamodeld */; };
 		328FBDFB8F4364EF1A687229 /* Pods_solarisTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A91A709063430D6E03207B1D /* Pods_solarisTests.framework */; };
 		6CF2154A2E8538724F1F80CC /* Pods_solaris_solarisUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 39577DCE7F28138483665ADE /* Pods_solaris_solarisUITests.framework */; };
 		77334B806A41780F0F4E981A /* Pods_solaris.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4A68CB3F3D8575CF4632EFD9 /* Pods_solaris.framework */; };
@@ -48,13 +47,12 @@
 		2CB568AD2C7CB9B70027924C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2CB568B02C7CB9B70027924C /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		2CB568B22C7CB9B70027924C /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
-		2CB568B52C7CB9B70027924C /* solaris.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = solaris.xcdatamodel; sourceTree = "<group>"; };
+		2CB568D72C7CB9B80027924C /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		2CB568BB2C7CB9B70027924C /* solarisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = solarisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CB568BF2C7CB9B70027924C /* solarisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = solarisTests.swift; sourceTree = "<group>"; };
 		2CB568C52C7CB9B70027924C /* solarisUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = solarisUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CB568C92C7CB9B70027924C /* solarisUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = solarisUITests.swift; sourceTree = "<group>"; };
 		2CB568CB2C7CB9B70027924C /* solarisUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = solarisUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		2CD17E2F2DEA0B4D00D398A2 /* solaris.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = solaris.xcdatamodel; sourceTree = "<group>"; };
 		39577DCE7F28138483665ADE /* Pods_solaris_solarisUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_solaris_solarisUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		47378FE20A4C1A6015752265 /* Pods-solaris-solarisUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-solaris-solarisUITests.debug.xcconfig"; path = "Target Support Files/Pods-solaris-solarisUITests/Pods-solaris-solarisUITests.debug.xcconfig"; sourceTree = "<group>"; };
 		4A68CB3F3D8575CF4632EFD9 /* Pods_solaris.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_solaris.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -150,17 +148,24 @@
 			isa = PBXGroup;
 			children = (
 				2CD17E262DEA0B4D00D398A2 /* Preview Content */,
-				2CD17E272DEA0B4D00D398A2 /* solaris.xcdatamodeld */,
 				2C943CA52DA99B870085FA15 /* Info.plist */,
 				2CB568A92C7CB9B50027924C /* SolarisApp.swift */,
 				2CB568AD2C7CB9B70027924C /* Assets.xcassets */,
 				2CB568B22C7CB9B70027924C /* Persistence.swift */,
-				2CB568B42C7CB9B70027924C /* solaris.xcdatamodeld */,
+				2CB568D62C7CB9B80027924C /* Models */,
 				2CB568AF2C7CB9B70027924C /* Preview Content */,
 				2C0369E42E36FA11009990C4 /* Features */,
 				2C0369FA2E36FA1C009990C4 /* Shared */,
 			);
 			path = solaris;
+			sourceTree = "<group>";
+		};
+		2CB568D62C7CB9B80027924C /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2CB568D72C7CB9B80027924C /* Item.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		2CB568AF2C7CB9B70027924C /* Preview Content */ = {
@@ -409,9 +414,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CB568B62C7CB9B70027924C /* solaris.xcdatamodeld in Sources */,
+				2CB568D82C7CB9B80027924C /* Item.swift in Sources */,
 				2CB568B32C7CB9B70027924C /* Persistence.swift in Sources */,
-				2CD17E312DEA0B4D00D398A2 /* solaris.xcdatamodeld in Sources */,
 				2CB568AA2C7CB9B50027924C /* SolarisApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -790,29 +794,6 @@
 			productName = MetalPetal;
 		};
 /* End XCSwiftPackageProductDependency section */
-
-/* Begin XCVersionGroup section */
-		2CB568B42C7CB9B70027924C /* solaris.xcdatamodeld */ = {
-			isa = XCVersionGroup;
-			children = (
-				2CB568B52C7CB9B70027924C /* solaris.xcdatamodel */,
-			);
-			currentVersion = 2CB568B52C7CB9B70027924C /* solaris.xcdatamodel */;
-			path = solaris.xcdatamodeld;
-			sourceTree = "<group>";
-			versionGroupType = wrapper.xcdatamodel;
-		};
-		2CD17E272DEA0B4D00D398A2 /* solaris.xcdatamodeld */ = {
-			isa = XCVersionGroup;
-			children = (
-				2CD17E2F2DEA0B4D00D398A2 /* solaris.xcdatamodel */,
-			);
-			currentVersion = 2CD17E2F2DEA0B4D00D398A2 /* solaris.xcdatamodel */;
-			path = solaris.xcdatamodeld;
-			sourceTree = "<group>";
-			versionGroupType = wrapper.xcdatamodel;
-		};
-/* End XCVersionGroup section */
 	};
 	rootObject = 2CB5689E2C7CB9B50027924C /* Project object */;
 }

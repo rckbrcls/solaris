@@ -6,16 +6,16 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct SolarisApp: App {
-    let persistenceController = PersistenceController.shared
     @StateObject private var colorSchemeManager = ColorSchemeManager()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .modelContainer(for: Item.self)
                 .environmentObject(colorSchemeManager)
         }
     }
