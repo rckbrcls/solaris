@@ -1,0 +1,24 @@
+{
+  "originHash" : "9b776ad40a23f7c0dd617f09803f655be28d0657a1819d751ea371a341c4ffbd",
+  "pins" : [
+    {
+      "identity" : "fluidgradient",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Cindori/FluidGradient",
+      "state" : {
+        "revision" : "9ddda4cf23671ef0228e88681ec6210cb3e0d7f7",
+        "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "metalpetal",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MetalPetal/MetalPetal.git",
+      "state" : {
+        "revision" : "f9b78897bd4214bb097f352a1bde0a4f4a1e2ddb",
+        "version" : "1.25.2"
+      }
+    }
+  ],
+  "version" : 3
+}

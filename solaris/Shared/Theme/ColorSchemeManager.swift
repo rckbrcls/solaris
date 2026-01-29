@@ -1,6 +1,6 @@
 //
 //  ColorSchemeManager.swift
-//  souvenir
+//  solaris
 //
 //  Created by Erick Barcelos on 31/05/25.
 //

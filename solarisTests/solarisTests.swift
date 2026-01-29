@@ -1,14 +1,14 @@
 //
-//  souvenirTests.swift
-//  souvenirTests
+//  solarisTests.swift
+//  solarisTests
 //
 //  Created by Erick Barcelos on 26/08/24.
 //
 
 import XCTest
-@testable import souvenir
+@testable import solaris
 
-final class souvenirTests: XCTestCase {
+final class solarisTests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

@@ -1,6 +1,6 @@
 //
-//  souvenirApp.swift
-//  souvenir
+//  SolarisApp.swift
+//  solaris
 //
 //  Created by Erick Barcelos on 26/08/24.
 //
@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct souvenirApp: App {
+struct SolarisApp: App {
     let persistenceController = PersistenceController.shared
     @StateObject private var colorSchemeManager = ColorSchemeManager()
 

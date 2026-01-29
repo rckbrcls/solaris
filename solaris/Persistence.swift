@@ -1,6 +1,6 @@
 //
 //  Persistence.swift
-//  souvenir
+//  solaris
 //
 //  Created by Erick Barcelos on 26/08/24.
 //
@@ -31,7 +31,7 @@ struct PersistenceController {
     let container: NSPersistentContainer
 
     init(inMemory: Bool = false) {
-        container = NSPersistentContainer(name: "souvenir")
+        container = NSPersistentContainer(name: "solaris")
         if inMemory {
             container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
         }

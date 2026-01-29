@@ -1,13 +1,13 @@
 //
-//  souvenirUITestsLaunchTests.swift
-//  souvenirUITests
+//  solarisUITestsLaunchTests.swift
+//  solarisUITests
 //
 //  Created by Erick Barcelos on 26/08/24.
 //
 
 import XCTest
 
-final class souvenirUITestsLaunchTests: XCTestCase {
+final class solarisUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true
