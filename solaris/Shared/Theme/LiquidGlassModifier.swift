@@ -32,31 +32,16 @@ private struct LiquidGlassModifier<ShapeType: InsettableShape>: ViewModifier {
     let borderColor: Color
     let borderLineWidth: CGFloat
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(in: containerShape)
-                .overlayBorderIfNeeded(
-                    using: containerShape,
-                    addBorder: addSubtleBorder,
-                    color: borderColor,
-                    lineWidth: borderLineWidth
-                )
-                .contentShape(containerShape)
-        } else {
-            content
-                .background(.ultraThinMaterial, in: containerShape)
-                .overlayBorderIfNeeded(
-                    using: containerShape,
-                    addBorder: addSubtleBorder,
-                    color: borderColor,
-                    lineWidth: borderLineWidth
-                )
-                .compositingGroup()
-                .shadow(radius: 0.0001)
-                .contentShape(containerShape)
-        }
+        content
+            .glassEffect(in: containerShape)
+            .overlayBorderIfNeeded(
+                using: containerShape,
+                addBorder: addSubtleBorder,
+                color: borderColor,
+                lineWidth: borderLineWidth
+            )
+            .contentShape(containerShape)
     }
 }
 

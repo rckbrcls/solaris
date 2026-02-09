@@ -123,38 +123,43 @@ struct ContentView: View {
                 }
             }
             .fullScreenCover(isPresented: $showCamera) {
-                PhotoCaptureView(onPhotoCaptured: { photo in
-                            busyTitle = "Saving photo..."
+                PhotoCaptureView(onPhotoCaptured: { data, ext, isFrontCamera in
+                    busyTitle = "Saving photo..."
                     isBusy = true
                     DispatchQueue.global(qos: .userInitiated).async {
                         let lib = PhotoLibrary.shared
                         lib.ensureDirs()
-                        let fixed = photo.fixOrientation()
-                        // Copia original da câmera (preferir HEIC): gera dados e salva como original
-                        var data: Data? = nil
-                        var ext = "heic"
-                        if let heic = exportUIImageAsHEIC(fixed) { data = heic; ext = "heic" }
-                        else if let jpg = fixed.jpegData(compressionQuality: 1.0) { data = jpg; ext = "jpg" }
-                        else if let png = fixed.pngData() { data = png; ext = "png" }
-                        guard let data else { DispatchQueue.main.async { isBusy = false }; return }
+                        var dataToWrite = data
+                        var extToUse = ext
+                        if isFrontCamera && AppSettings.shared.mirrorFrontCamera {
+                            if let img = UIImage(data: data) {
+                                let mirrored = img.horizontallyMirrored()
+                                let (encoded, encExt) = encodeUIImageBestEffort(mirrored)
+                                dataToWrite = encoded
+                                extToUse = encExt
+                            }
+                        }
                         let id = UUID().uuidString
-                        let origURL = lib.originalsDir().appendingPathComponent("\(id).\(ext)")
-                        try? data.write(to: origURL)
-                        // Thumb
+                        let origURL = lib.originalsDir().appendingPathComponent("\(id).\(extToUse)")
+                        try? dataToWrite.write(to: origURL)
                         var thumbURL = lib.thumbsDir().appendingPathComponent("\(id).jpg")
-                        if let thumbImg = fixed.resizeToFit(maxSize: 512), let (tdata, text) = encodeThumbnailImage(thumbImg) {
+                        if let thumbImg = loadUIImageThumbnail(from: dataToWrite, maxPixel: 512),
+                           let (tdata, text) = encodeThumbnailImage(thumbImg) {
                             thumbURL = lib.thumbsDir().appendingPathComponent("\(id).\(text)")
                             try? tdata.write(to: thumbURL)
                         }
-                        // Atualiza manifest e UI
                         let rec = PhotoRecord(id: id, originalURL: origURL, thumbURL: thumbURL, editedURL: nil, editState: nil, createdAt: Date())
                         records.append(rec)
                         try? lib.saveManifest(PhotoManifest(items: records))
-                        let uiThumb = UIImage(contentsOfFile: thumbURL.path) ?? fixed
-                        ImageCache.shared.set(uiThumb, forKey: "thumb_\(id)")
-                        DispatchQueue.main.async {
-                            photos.append(PhotoItem(id: id, record: rec, image: uiThumb))
-                            isBusy = false
+                        let uiThumb = UIImage(contentsOfFile: thumbURL.path) ?? loadUIImageThumbnail(from: dataToWrite, maxPixel: 512)
+                        if let thumb = uiThumb {
+                            ImageCache.shared.set(thumb, forKey: "thumb_\(id)")
+                            DispatchQueue.main.async {
+                                photos.append(PhotoItem(id: id, record: rec, image: thumb))
+                                isBusy = false
+                            }
+                        } else {
+                            DispatchQueue.main.async { isBusy = false }
                         }
                     }
                 })
@@ -646,8 +651,8 @@ func encodeUIImageBestEffort(_ image: UIImage) -> (Data, String) {
 
 // MARK: - Thumbnail encode helper
 func encodeThumbnailImage(_ image: UIImage) -> (Data, String)? {
+    if let jpg = image.jpegData(compressionQuality: 0.88) { return (jpg, "jpg") }
     if let heic = exportUIImageAsHEIC(image) { return (heic, "heic") }
-    if let jpg = image.jpegData(compressionQuality: 0.9) { return (jpg, "jpg") }
     return nil
 }
 

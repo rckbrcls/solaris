@@ -50,8 +50,9 @@ private extension View {
 }
 
 struct PhotoCaptureView: View {
-    var onPhotoCaptured: (UIImage) -> Void
+    var onPhotoCaptured: (Data, String, Bool) -> Void
     @State private var capturedImage: UIImage? = nil
+    @State private var capturedPhotoData: (Data, String)? = nil
     @State private var isPhotoTaken: Bool = false
     @State private var isFlashOn: Bool = false
     @State private var isGridOn: Bool = false
@@ -85,8 +86,7 @@ struct PhotoCaptureView: View {
     @State private var selectedAspect: AspectOption = .ratio4x3
     @State private var showAspectMenu: Bool = false
     @Environment(\.dismiss) var dismiss
-    @State private var isDraggingDismiss: Bool = false
-    
+
     var body: some View {
         ZStack {
             Color(UIColor.systemBackground).ignoresSafeArea()
@@ -94,13 +94,12 @@ struct PhotoCaptureView: View {
                 ZStack {
                     let previewW = UIScreen.main.bounds.width
                     let previewH: CGFloat = previewW * (selectedAspect.height / max(1, selectedAspect.width))
-                    CameraPreview(capturedImage: $capturedImage, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor, isFrontCamera: $isFrontCamera)
-                        .allowsHitTesting(!isDraggingDismiss)
+                    CameraPreview(capturedImage: $capturedImage, capturedPhotoData: $capturedPhotoData, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor, isFrontCamera: $isFrontCamera)
                         .frame(width: previewW, height: previewH)
                         .animation(.easeInOut(duration: 0.22), value: selectedAspect)
                         .clipped()
                         .cornerRadius(20)
-                
+
                     if isGridOn {
                         // Grid must match the preview's frame to follow aspect changes
                         GeometryReader { geo in
@@ -137,7 +136,7 @@ struct PhotoCaptureView: View {
                         .clipped()
                         .cornerRadius(20)
                     }
-                
+
                     VStack(spacing: 8) {
                         HStack {
                             Button(action: {
@@ -146,7 +145,7 @@ struct PhotoCaptureView: View {
                                 Image(systemName: "xmark")
                                     .cameraIconStyle()
                             }
-                            
+
                             Spacer()
                         }
                         .padding(.horizontal, 16)
@@ -154,7 +153,7 @@ struct PhotoCaptureView: View {
                         Spacer()
                         HStack(alignment: .center) {
                             Spacer()
-                            
+
                             Button(action: {
                                 NotificationCenter.default.post(name: .capturePhoto, object: nil)
                             }) {
@@ -164,14 +163,14 @@ struct PhotoCaptureView: View {
                             .padding(20)
                             .offset(y: 14)
                             .buttonStyle(PressScaleStyle())
-                            
+
                             Spacer()
                             // Additional button or user-selected functionality can be placed here
                         }
                     }
                     .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 16.0 / 9.0)
                 }
-                
+
                 // Bottom overlay controls: grid, flash, aspect, switch
                 VStack {
                     if showAspectMenu {
@@ -227,46 +226,15 @@ struct PhotoCaptureView: View {
                     .padding(.bottom, 12)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                
+
             }
                 .navigationBarBackButtonHidden(true)
-                .onChange(of: capturedImage) { newImage in
-                    guard let image = newImage else { return }
-
-                    // Dismiss immediately to keep UI responsive
+                .onChange(of: isPhotoTaken) { _, taken in
+                    guard taken, let (data, ext) = capturedPhotoData else { return }
                     dismiss()
-
-                    // Process off the main thread to avoid blocking UI
-                    Task(priority: .userInitiated) {
-                        var processed = image.fixOrientation()
-
-                        if isFrontCamera && AppSettings.shared.mirrorFrontCamera {
-                            processed = processed.horizontallyMirrored()
-                        }
-
-                        let cropped = cropToSelectedAspect(processed, aspect: selectedAspect)
-
-                        await MainActor.run {
-                            onPhotoCaptured(cropped)
-                        }
-                    }
+                    onPhotoCaptured(data, ext, isFrontCamera)
                 }
                 .padding(.top)
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 20)
-                        .onChanged { value in
-                            // Apenas sinaliza que está arrastando para evitar conflitos de gesto do preview
-                            if value.translation.height > 0 { isDraggingDismiss = true }
-                        }
-                        .onEnded { value in
-                            defer { isDraggingDismiss = false }
-                            let threshold: CGFloat = 120
-                            if value.translation.height > threshold {
-                                // Não anima o conteúdo; apenas faz o mesmo dismiss do botão (animação do sistema)
-                                dismiss()
-                            }
-                        }
-                )
                 .tint(.primary)
             }
         }
@@ -274,32 +242,5 @@ struct PhotoCaptureView: View {
 
 
 #Preview {
-    PhotoCaptureView(onPhotoCaptured: { _ in })
-}
-
-// MARK: - Helpers
-extension PhotoCaptureView {
-    private func cropToSelectedAspect(_ image: UIImage, aspect: AspectOption) -> UIImage {
-        // Always crop to selected portrait aspect
-        let w = image.size.width
-        let h = image.size.height
-        let targetW = aspect.width
-        let targetH = aspect.height
-        guard targetW > 0, targetH > 0 else { return image }
-        let targetRatio = targetW / targetH
-        let imageRatio = w / h
-        var cropRect: CGRect
-        if imageRatio > targetRatio {
-            // image is wider than target; crop width
-            let newW = h * targetRatio
-            cropRect = CGRect(x: (w - newW) / 2.0, y: 0, width: newW, height: h)
-        } else {
-            // image is taller than target; crop height
-            let newH = w / targetRatio
-            cropRect = CGRect(x: 0, y: (h - newH) / 2.0, width: w, height: newH)
-        }
-        guard let cg = image.cgImage?.cropping(to: cropRect.integral) else { return image }
-        // Return cropped (keeping original scale/orientation as .up)
-        return UIImage(cgImage: cg, scale: image.scale, orientation: .up)
-    }
+    PhotoCaptureView(onPhotoCaptured: { _, _, _ in })
 }

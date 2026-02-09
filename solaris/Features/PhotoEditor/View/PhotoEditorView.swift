@@ -58,6 +58,8 @@ struct PhotoEditorView: View {
     @State private var imageHeight: CGFloat = 0
     @State private var undoToastWorkItem: DispatchWorkItem? = nil
     @State private var showSaveDiscardContent: Bool = false
+    @State private var showExportSheet = false
+    @State private var exportItems: [Any] = []
 
     private var initialEditState: PhotoEditState
     private var initialBaseFilterState: PhotoEditState
@@ -118,6 +120,9 @@ struct PhotoEditorView: View {
             undoToastWorkItem?.cancel()
             undoToastWorkItem = nil
         }
+        .sheet(isPresented: $showExportSheet) {
+            ActivityView(activityItems: exportItems)
+        }
         .toolbar { } // remove default toolbar items
     }
 }
@@ -157,7 +162,7 @@ private extension PhotoEditorView {
                 selectedCategory: $selectedCategory,
                 bottomSize: $bottomSize
             )
-            .padding(.bottom, 16)
+            .padding(.bottom, 18)
         }
         .padding(.top, 10)
         .padding(.bottom, 6)
@@ -217,11 +222,46 @@ private extension PhotoEditorView {
                 onEndAdjust: { viewModel.endInteractiveAdjustments() }
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
-        } else if selectedCategory == "sticker" {
-            Text("Sticker UI placeholder").padding()
+        } else if selectedCategory == "export" {
+            exportSection
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
+
+    var exportSection: some View {
+        VStack(spacing: 10) {
+            Text("Export photo")
+                .font(.subheadline.bold())
+                .foregroundColor(.primary)
+
+            HStack(spacing: 10) {
+                Button(action: { performSaveAndExit() }) {
+                    Label("Save edit", systemImage: "square.and.arrow.down")
+                        .font(.footnote.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundColor(.white)
+                }
+
+                Button(action: { performShareExport() }) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .font(.footnote.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .liquidGlass(
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                            borderColor: Color.primary.opacity(0.15)
+                        )
+                        .foregroundColor(.primary)
+                }
+            }
+            .disabled(isSaving)
+        }
+        .padding(.horizontal)
+        .padding(.top, 6)
+    }
+
     @ViewBuilder
     func undoToastView() -> some View {
         if showUndoToast, let msg = viewModel.lastUndoMessage {
@@ -429,6 +469,19 @@ private extension PhotoEditorView {
                 viewModel.editState = initialEditState
                 isSaving = false
                 dismiss()
+            }
+        }
+    }
+
+    func performShareExport() {
+        isSaving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let finalImage = viewModel.generateFinalImage()
+            DispatchQueue.main.async {
+                isSaving = false
+                guard let finalImage else { return }
+                exportItems = [finalImage]
+                showExportSheet = true
             }
         }
     }

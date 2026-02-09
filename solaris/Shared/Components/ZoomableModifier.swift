@@ -24,32 +24,11 @@ struct ZoomableModifier: ViewModifier {
             }
             .animatableTransformEffect(transform)
             .gesture(dragGesture, including: transform == .identity ? .none : .all)
-            .modify { view in
-                if #available(iOS 17.0, *) {
-                    view.gesture(magnificationGesture)
-                } else {
-                    view.gesture(oldMagnificationGesture)
-                }
-            }
+            .gesture(magnificationGesture)
             .gesture(doubleTapGesture)
 
     }
 
-    @available(iOS, introduced: 16.0, deprecated: 17.0)
-    private var oldMagnificationGesture: some Gesture {
-        MagnificationGesture()
-            .onChanged { value in
-                let zoomFactor = 0.5
-                let scale = value * zoomFactor
-                transform = lastTransform.scaledBy(x: scale, y: scale)
-                onScaleChange?(transform.scaleX, transform)
-            }
-            .onEnded { _ in
-                onEndGesture()
-            }
-    }
-
-    @available(iOS 17.0, *)
     private var magnificationGesture: some Gesture {
         MagnifyGesture(minimumScaleDelta: 0)
             .onChanged { value in
@@ -178,11 +157,6 @@ public extension View {
 }
 
 private extension View {
-    @ViewBuilder
-    func modify(@ViewBuilder _ fn: (Self) -> some View) -> some View {
-        fn(self)
-    }
-
     @ViewBuilder
     func animatableTransformEffect(_ transform: CGAffineTransform) -> some View {
         scaleEffect(

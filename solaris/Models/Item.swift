@@ -3,6 +3,7 @@
 //  solaris
 //
 
+import Foundation
 import SwiftData
 
 @Model

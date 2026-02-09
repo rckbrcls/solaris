@@ -16,9 +16,9 @@ struct PhotoEditorToolbar: View {
             
             CategoryButton(category: "filters", icon: "paintpalette", selectedCategory: $selectedCategory, bottomSize: $bottomSize, targetSize: 0.25)
             
-            CategoryButton(category: "sticker", icon: "seal", selectedCategory: $selectedCategory, bottomSize: $bottomSize, targetSize: 0.25)
-            
             CategoryButton(category: "edit", icon: "slider.horizontal.3", selectedCategory: $selectedCategory, bottomSize: $bottomSize, targetSize: 0.30)
+            
+            CategoryButton(category: "export", icon: "square.and.arrow.up", selectedCategory: $selectedCategory, bottomSize: $bottomSize, targetSize: 0.22)
         }
         .padding(.horizontal)
 

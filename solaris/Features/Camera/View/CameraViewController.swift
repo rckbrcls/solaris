@@ -8,6 +8,7 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     var previewLayer: AVCaptureVideoPreviewLayer?
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     var capturedImage: Binding<UIImage?> = .constant(nil)
+    var capturedPhotoData: Binding<(Data, String)?> = .constant(nil)
     var isPhotoTaken: Binding<Bool> = .constant(false)
     var isFlashOn: Binding<Bool> = .constant(false)
     var zoomFactor: Binding<CGFloat> = .constant(1.0)
@@ -39,14 +40,10 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
             photoOutput.isHighResolutionCaptureEnabled = true
             
             // Configura qualidade máxima
-            if #available(iOS 15.0, *) {
-                photoOutput.maxPhotoQualityPrioritization = .quality
-            }
-            
+            photoOutput.maxPhotoQualityPrioritization = .quality
+
             // Habilita captura em formato máximo disponível
-            if #available(iOS 14.0, *) {
-                photoOutput.isAppleProRAWEnabled = photoOutput.isAppleProRAWSupported
-            }
+            photoOutput.isAppleProRAWEnabled = photoOutput.isAppleProRAWSupported
             
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
@@ -118,15 +115,11 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         // Configura qualidade máxima e formato
         var settings: AVCapturePhotoSettings
         
-        if #available(iOS 14.0, *) {
-            let availableFormats = photoOutput?.availablePhotoCodecTypes ?? []
-            if availableFormats.contains(.hevc) {
-                settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
-            } else if availableFormats.contains(.jpeg) {
-                settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
-            } else {
-                settings = AVCapturePhotoSettings()
-            }
+        let availableFormats = photoOutput?.availablePhotoCodecTypes ?? []
+        if availableFormats.contains(.hevc) {
+            settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
+        } else if availableFormats.contains(.jpeg) {
+            settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         } else {
             settings = AVCapturePhotoSettings()
         }
@@ -134,9 +127,7 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         settings.isHighResolutionPhotoEnabled = true
         
         // Configura qualidade máxima
-        if #available(iOS 15.0, *) {
-            settings.photoQualityPrioritization = .quality
-        }
+        settings.photoQualityPrioritization = .quality
         
         if isFlashOn.wrappedValue {
             settings.flashMode = .on
@@ -154,14 +145,14 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
     }
     
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard let imageData = photo.fileDataRepresentation(),
-              let image = UIImage(data: imageData) else { return }
-        
+        guard let imageData = photo.fileDataRepresentation() else { return }
+        let ext = detectImageExtension(data: imageData)
+        let thumbnail = loadUIImageThumbnail(from: imageData, maxPixel: 800)
         DispatchQueue.main.async {
-            // Ensure overlay is cleared and deliver result
             self.flashOverlayView?.layer.removeAllAnimations()
             self.flashOverlayView?.alpha = 0.0
-            self.capturedImage.wrappedValue = image
+            self.capturedPhotoData.wrappedValue = (imageData, ext)
+            self.capturedImage.wrappedValue = thumbnail
             self.isPhotoTaken.wrappedValue = true
         }
     }
