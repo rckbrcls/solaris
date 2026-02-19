@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct SolarisApp: App {
@@ -14,8 +13,7 @@ struct SolarisApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .modelContainer(for: Item.self)
+            HomeView()
                 .environmentObject(colorSchemeManager)
         }
     }

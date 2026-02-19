@@ -12,7 +12,7 @@ extension View {
     func liquidGlass<ShapeType: InsettableShape>(
         in containerShape: ShapeType = RoundedRectangle(cornerRadius: 16, style: .continuous),
         addSubtleBorder: Bool = true,
-        borderColor: Color = Color.primary.opacity(0.08),
+        borderColor: Color = Color.borderSubtle,
         borderLineWidth: CGFloat = 1
     ) -> some View {
         modifier(

@@ -8,13 +8,13 @@ struct SettingsFloatingButtonView: View {
             ZStack {
                 Circle().fill(Color.clear)
                 Image(systemName: "gearshape.fill")
-                    .foregroundColor(.primary)
+                    .foregroundColor(Color.textPrimary)
                     .font(.system(size: 18, weight: .semibold))
             }
             .frame(width: 52, height: 52)
             .liquidGlass(
                 in: Circle(),
-                borderColor: Color.primary.opacity(0.15)
+                borderColor: Color.borderMedium
             )
             .shadow(radius: 4, y: 2)
         }

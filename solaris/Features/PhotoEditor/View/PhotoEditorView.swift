@@ -20,19 +20,19 @@ private struct EditorImageHeightKey: PreferenceKey {
 // Circular neutral icon style (match camera buttons)
 private struct EditorIconButtonStyle: ViewModifier {
     var size: CGFloat = 44
-    var foreground: Color = .primary
+    var foreground: Color = .textPrimary
 
     func body(content: Content) -> some View {
         content
             .foregroundColor(foreground)
             .frame(width: size, height: size)
-            .liquidGlass(in: Circle(), borderColor: Color.primary.opacity(0.2))
+            .liquidGlass(in: Circle(), borderColor: Color.borderStrong)
             .contentShape(Circle())
     }
 }
 
 private extension View {
-    func editorIconStyle(size: CGFloat = 44, foreground: Color = .primary) -> some View {
+    func editorIconStyle(size: CGFloat = 44, foreground: Color = .textPrimary) -> some View {
         modifier(EditorIconButtonStyle(size: size, foreground: foreground))
     }
 }
@@ -48,7 +48,6 @@ struct PhotoEditorView: View {
     @State private var lastZoomScale: CGFloat = 1.0
     @State private var bottomSize: CGFloat = 0.25
     @State private var selectedCategory: String = "filters"
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     @StateObject private var viewModel: PhotoEditorViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showSaveDiscardModal = false
@@ -60,6 +59,8 @@ struct PhotoEditorView: View {
     @State private var showSaveDiscardContent: Bool = false
     @State private var showExportSheet = false
     @State private var exportItems: [Any] = []
+    @State private var showSaveFilterAlert = false
+    @State private var saveFilterName = ""
 
     private var initialEditState: PhotoEditState
     private var initialBaseFilterState: PhotoEditState
@@ -122,6 +123,19 @@ struct PhotoEditorView: View {
         }
         .sheet(isPresented: $showExportSheet) {
             ActivityView(activityItems: exportItems)
+        }
+        .alert("Save Filter", isPresented: $showSaveFilterAlert) {
+            TextField("Filter name", text: $saveFilterName)
+            Button("Save") {
+                let name = saveFilterName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                SavedFiltersStore.shared.addFilter(name: name, state: viewModel.combinedState)
+                let gen = UINotificationFeedbackGenerator()
+                gen.notificationOccurred(.success)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Give your current edit a name to reuse it as a filter preset.")
         }
         .toolbar { } // remove default toolbar items
     }
@@ -232,17 +246,22 @@ private extension PhotoEditorView {
         VStack(spacing: 10) {
             Text("Export photo")
                 .font(.subheadline.bold())
-                .foregroundColor(.primary)
+                .foregroundColor(Color.textPrimary)
 
             HStack(spacing: 10) {
-                Button(action: { performSaveAndExit() }) {
-                    Label("Save edit", systemImage: "square.and.arrow.down")
+                Button(action: {
+                    saveFilterName = ""
+                    showSaveFilterAlert = true
+                }) {
+                    Label("Save filter", systemImage: "camera.filters")
                         .font(.footnote.bold())
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .foregroundColor(.white)
+                        .background(Color.actionAccent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundColor(Color.textOnAccent)
                 }
+                .disabled(!viewModel.hasAnyFilterApplied)
+                .opacity(viewModel.hasAnyFilterApplied ? 1.0 : 0.5)
 
                 Button(action: { performShareExport() }) {
                     Label("Share", systemImage: "square.and.arrow.up")
@@ -251,9 +270,9 @@ private extension PhotoEditorView {
                         .padding(.vertical, 10)
                         .liquidGlass(
                             in: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                            borderColor: Color.primary.opacity(0.15)
+                            borderColor: Color.borderMedium
                         )
-                        .foregroundColor(.primary)
+                        .foregroundColor(Color.textPrimary)
                 }
             }
             .disabled(isSaving)
@@ -267,16 +286,16 @@ private extension PhotoEditorView {
         if showUndoToast, let msg = viewModel.lastUndoMessage {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.uturn.backward")
-                    .foregroundColor(.primary)
+                    .foregroundColor(Color.textPrimary)
                 Text(msg)
                     .font(.footnote.bold())
-                    .foregroundColor(.primary)
+                    .foregroundColor(Color.textPrimary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .liquidGlass(
                 in: Capsule(),
-                borderColor: Color.primary.opacity(0.15)
+                borderColor: Color.borderMedium
             )
             .shadow(radius: 3)
             .transition(.asymmetric(insertion: .scale(scale: 0.9).combined(with: .opacity), removal: .opacity))
@@ -377,7 +396,7 @@ private extension PhotoEditorView {
     var saveDiscardOverlay: some View {
         ZStack {
             // Backdrop
-            Color.black.opacity(0.35)
+            Color.overlayDimming
                 .ignoresSafeArea()
                 .opacity(showSaveDiscardContent ? 1.0 : 0.0)
                 .onTapGesture {
@@ -405,8 +424,8 @@ private extension PhotoEditorView {
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .foregroundColor(.white)
+                            .background(Color.actionAccent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundColor(Color.textOnAccent)
                     }
                     Button(action: {
                         withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = false }
@@ -421,8 +440,8 @@ private extension PhotoEditorView {
                             .font(.body.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Color.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .foregroundColor(.white)
+                            .background(Color.actionDestructive, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundColor(Color.textOnAccent)
                     }
                     Button(action: {
                         withAnimation(.easeOut(duration: 0.22)) { showSaveDiscardContent = false }
@@ -436,9 +455,9 @@ private extension PhotoEditorView {
                             .padding(.vertical, 10)
                             .liquidGlass(
                                 in: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                                borderColor: Color.primary.opacity(0.15)
+                                borderColor: Color.borderMedium
                             )
-                            .foregroundColor(.primary)
+                            .foregroundColor(Color.textPrimary)
                     }
                 }
             }
@@ -446,7 +465,7 @@ private extension PhotoEditorView {
             .frame(maxWidth: 360)
             .liquidGlass(
                 in: RoundedRectangle(cornerRadius: 16, style: .continuous),
-                borderColor: Color.primary.opacity(0.12)
+                borderColor: Color.borderMedium
             )
             .shadow(radius: 12)
             .padding(.horizontal, 24)
@@ -488,5 +507,5 @@ private extension PhotoEditorView {
 }
 
 #Preview {
-    ContentView()
+    HomeView()
 }

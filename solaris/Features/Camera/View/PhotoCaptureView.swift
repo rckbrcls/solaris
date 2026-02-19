@@ -12,7 +12,7 @@ private struct ShutterButton: View {
             .frame(width: size, height: size)
             .liquidGlass(
                 in: Circle(),
-                borderColor: Color.primary.opacity(0.08)
+                borderColor: Color.borderSubtle
             )
             .contentShape(Circle())
         .accessibilityLabel("Capturar foto")
@@ -32,20 +32,45 @@ private struct PressScaleStyle: ButtonStyle {
 // Estilo consistente para ícones redondos na câmera
 private struct CameraIconButtonStyle: ViewModifier {
     var size: CGFloat = 44
-    var foreground: Color = .primary
+    var foreground: Color = .textPrimary
 
     func body(content: Content) -> some View {
         content
             .foregroundColor(foreground)
             .frame(width: size, height: size)
-            .liquidGlass(in: Circle(), borderColor: Color.primary.opacity(0.2))
+            .liquidGlass(in: Circle(), borderColor: Color.borderStrong)
             .contentShape(Circle())
     }
 }
 
 private extension View {
-    func cameraIconStyle(size: CGFloat = 44, foreground: Color = .primary) -> some View {
+    func cameraIconStyle(size: CGFloat = 44, foreground: Color = .textPrimary) -> some View {
         modifier(CameraIconButtonStyle(size: size, foreground: foreground))
+    }
+}
+
+enum AspectOption: String, CaseIterable, Identifiable, Codable {
+    case square = "1:1"
+    case ratio4x3 = "4:3"   // portrait
+    case ratio3x2 = "3:2"   // portrait
+    case ratio9x16 = "9:16" // portrait
+    var id: String { rawValue }
+    // Returns width:height factors (portrait-aware)
+    var width: CGFloat {
+        switch self {
+        case .square: return 1
+        case .ratio4x3: return 3
+        case .ratio3x2: return 2
+        case .ratio9x16: return 9
+        }
+    }
+    var height: CGFloat {
+        switch self {
+        case .square: return 1
+        case .ratio4x3: return 4
+        case .ratio3x2: return 3
+        case .ratio9x16: return 16
+        }
     }
 }
 
@@ -54,42 +79,17 @@ struct PhotoCaptureView: View {
     @State private var capturedImage: UIImage? = nil
     @State private var capturedPhotoData: (Data, String)? = nil
     @State private var isPhotoTaken: Bool = false
-    @State private var isFlashOn: Bool = false
-    @State private var isGridOn: Bool = false
+    @State private var isFlashOn: Bool = AppSettings.shared.cameraFlashOn
+    @State private var isGridOn: Bool = AppSettings.shared.cameraGridOn
     @State private var zoomFactor: CGFloat = 1.0
-    @State private var isFrontCamera: Bool = false
-    // Aspect ratio selection
-    enum AspectOption: String, CaseIterable, Identifiable {
-        case square = "1:1"
-        case ratio4x3 = "4:3"   // portrait
-        case ratio3x2 = "3:2"   // portrait
-        case ratio9x16 = "9:16" // portrait
-        var id: String { rawValue }
-        // Returns width:height factors (portrait-aware)
-        var width: CGFloat {
-            switch self {
-            case .square: return 1
-            case .ratio4x3: return 3
-            case .ratio3x2: return 2
-            case .ratio9x16: return 9
-            }
-        }
-        var height: CGFloat {
-            switch self {
-            case .square: return 1
-            case .ratio4x3: return 4
-            case .ratio3x2: return 3
-            case .ratio9x16: return 16
-            }
-        }
-    }
-    @State private var selectedAspect: AspectOption = .ratio4x3
+    @State private var isFrontCamera: Bool = AppSettings.shared.cameraUseFrontCamera
+    @State private var selectedAspect: AspectOption = AppSettings.shared.cameraAspectRatio
     @State private var showAspectMenu: Bool = false
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground).ignoresSafeArea()
+            Color.backgroundPrimary.ignoresSafeArea()
             VStack {
                 ZStack {
                     let previewW = UIScreen.main.bounds.width
@@ -106,7 +106,7 @@ struct PhotoCaptureView: View {
                             let width = geo.size.width
                             let height = geo.size.height
                             let lineWidth = max(0.4, min(0.9, min(width, height) / 500))
-                            let gridColor = Color.white.opacity(0.42)
+                            let gridColor = Color.gridLine
 
                             Canvas { context, size in
                                 let w = size.width
@@ -182,11 +182,11 @@ struct PhotoCaptureView: View {
                                         Button(action: { withAnimation(.easeOut(duration: 0.15)) { selectedAspect = opt; showAspectMenu = false } }) {
                                             Text(opt.rawValue)
                                                 .font(.caption.bold())
-                                                .foregroundColor(selectedAspect == opt ? .white : .primary)
+                                                .foregroundColor(selectedAspect == opt ? Color.textOnAccent : Color.textPrimary)
                                                 .padding(.horizontal, 8)
                                                 .padding(.vertical, 4)
                                                 .background(
-                                                    selectedAspect == opt ? Color.accentColor : Color.primary.opacity(0.08)
+                                                    selectedAspect == opt ? Color.actionAccent : Color.borderSubtle
                                                 )
                                                 .clipShape(Capsule())
                                         }
@@ -234,8 +234,12 @@ struct PhotoCaptureView: View {
                     dismiss()
                     onPhotoCaptured(data, ext, isFrontCamera)
                 }
+                .onChange(of: isFlashOn) { _, val in AppSettings.shared.cameraFlashOn = val }
+                .onChange(of: isGridOn) { _, val in AppSettings.shared.cameraGridOn = val }
+                .onChange(of: selectedAspect) { _, val in AppSettings.shared.cameraAspectRatio = val }
+                .onChange(of: isFrontCamera) { _, val in AppSettings.shared.cameraUseFrontCamera = val }
                 .padding(.top)
-                .tint(.primary)
+                .tint(Color.textPrimary)
             }
         }
     }

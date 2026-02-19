@@ -77,27 +77,12 @@ class PhotoEditorViewModel: ObservableObject {
     @Published var isInteracting: Bool = false
     
     // Para filtros aplicados com tap simples (persistem mas não mostram nos sliders)
-    @Published var baseFilterState = PhotoEditState() {
-        didSet {
-            print("[BaseFilter] baseFilterState changed!")
-            print("[BaseFilter] New saturation: \(baseFilterState.saturation)")
-            print("[BaseFilter] New colorTint: \(baseFilterState.colorTint)")
-            print("[BaseFilter] New isDualToneActive: \(baseFilterState.isDualToneActive)")
-        }
-    }
+    @Published var baseFilterState = PhotoEditState()
     
     // Estado combinado para renderização (filtro + ajustes do usuário)
     var combinedState: PhotoEditState {
         var combined = baseFilterState
-        
-        print("[CombinedState] Starting combination:")
-        print("[CombinedState] Base saturation: \(baseFilterState.saturation)")
-        print("[CombinedState] Edit saturation: \(editState.saturation)")
-        print("[CombinedState] Base colorTint: \(baseFilterState.colorTint)")
-        print("[CombinedState] Edit colorTint: \(editState.colorTint)")
-        print("[CombinedState] Base colorInvert: \(baseFilterState.colorInvert)")
-        print("[CombinedState] Edit colorInvert: \(editState.colorInvert)")
-        
+
         // SEMPRE aplica os ajustes do editState sobre o filtro base
         // Não verifica valores padrão, simplesmente combina
         
@@ -132,12 +117,7 @@ class PhotoEditorViewModel: ObservableObject {
             combined.colorTintFactor = editState.colorTintFactor
         }
         // Se editState não tem cor personalizada, usa do filtro base (já está copiado)
-        
-        print("[CombinedState] Final saturation: \(combined.saturation)")
-        print("[CombinedState] Final colorTint: \(combined.colorTint)")
-        print("[CombinedState] Final isDualToneActive: \(combined.isDualToneActive)")
-        print("[CombinedState] Final colorInvert: \(combined.colorInvert)")
-        
+
         return combined
     }
 
@@ -152,14 +132,6 @@ class PhotoEditorViewModel: ObservableObject {
         self.originalImageData = originalImageData
         
         buildPreviewBases()
-        if let base = self.previewBase {
-            print("[PhotoEditorViewModel] previewBase size: \(base.size), scale: \(base.scale)")
-            if let cg = base.cgImage {
-                print("[PhotoEditorViewModel] previewBase alphaInfo: \(cg.alphaInfo), bitsPerPixel: \(cg.bitsPerPixel)")
-            }
-        } else {
-            print("[PhotoEditorViewModel] previewBase is nil after resizeToFit")
-        }
         // Listener unificado que monitora mudanças em qualquer dos dois states
         Publishers.CombineLatest($editState, $baseFilterState)
             .removeDuplicates { prev, curr in
@@ -168,9 +140,7 @@ class PhotoEditorViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (editState, baseState) in
                 guard let self = self else { return }
-                print("[Listener] States changed - edit saturation: \(editState.saturation), base saturation: \(baseState.saturation)")
                 let combined = self.combinedState
-                print("[Listener] Combined saturation: \(combined.saturation)")
                 self.generatePreview(state: combined)
             }
             .store(in: &cancellables)
@@ -185,14 +155,6 @@ class PhotoEditorViewModel: ObservableObject {
         self.previewBaseLow = originalImage?.resizeToFit(maxSize: lowPoints)
         // Start with high by default
         self.previewBase = self.previewBaseHigh
-        if let base = self.previewBase {
-            print("[PhotoEditorViewModel] previewBase size: \(base.size), scale: \(base.scale)")
-            if let cg = base.cgImage {
-                print("[PhotoEditorViewModel] previewBase alphaInfo: \(cg.alphaInfo), bitsPerPixel: \(cg.bitsPerPixel)")
-            }
-        } else {
-            print("[PhotoEditorViewModel] previewBase is nil after resizeToFit")
-        }
     }
 
     func beginInteractiveAdjustments() {
@@ -462,25 +424,16 @@ class PhotoEditorViewModel: ObservableObject {
     func applyBaseFilter(_ filterState: PhotoEditState) {
         let defaultState = PhotoEditState()
         
-        print("[Filter] TAP: Applying base filter")
-        print("[Filter] TAP: Current base similar to target? \(isStatesSimilar(baseFilterState, filterState))")
-        print("[Filter] TAP: Current edit state: \(editState)")
-        
         // Se o mesmo filtro já está aplicado como base, remove
         if isStatesSimilar(baseFilterState, filterState) {
-            print("[Filter] TAP: Same base filter detected, removing")
             registerFilterUndoIfNeeded()
             baseFilterState = defaultState
             return
         }
         
         // Aplica novo filtro como base (permite combinação com slider existente)
-        print("[Filter] TAP: Applying new base filter (may combine with existing slider filter)")
         registerFilterUndoIfNeeded()
         baseFilterState = filterState
-        
-        print("[Filter] TAP: Base filter applied - saturation: \(baseFilterState.saturation)")
-        print("[Filter] TAP: Current edit state preserved: \(editState)")
     }
     
     /// Aplica filtro via LONG PRESS (editState)  
@@ -488,13 +441,8 @@ class PhotoEditorViewModel: ObservableObject {
     func applySliderFilter(_ filterState: PhotoEditState) {
         let defaultState = PhotoEditState()
         
-        print("[Filter] LONG PRESS: Applying slider filter")
-        print("[Filter] LONG PRESS: Current edit similar to target? \(isStatesSimilar(editState, filterState))")
-        print("[Filter] LONG PRESS: Current base state: \(baseFilterState)")
-        
         // Se o mesmo filtro já está aplicado nos sliders, remove apenas ele
         if isStatesSimilar(editState, filterState) {
-            print("[Filter] LONG PRESS: Same slider filter detected, removing")
             registerFilterUndoIfNeeded()
             editState = defaultState
             // Preserva baseFilterState para permitir combinações
@@ -502,12 +450,8 @@ class PhotoEditorViewModel: ObservableObject {
         }
         
         // Aplica novo filtro nos sliders (permite combinação com base existente)
-        print("[Filter] LONG PRESS: Applying new slider filter (may combine with existing base filter)")
         registerFilterUndoIfNeeded()
         editState = filterState
-        
-        print("[Filter] LONG PRESS: Slider filter applied - saturation: \(editState.saturation)")
-        print("[Filter] LONG PRESS: Current base state preserved: \(baseFilterState)")
     }
     
     /// Remove filtro específico baseado no tipo de aplicação
@@ -516,36 +460,31 @@ class PhotoEditorViewModel: ObservableObject {
         
         switch applicationType {
         case .base:
-            print("[Filter] Removing base filter")
             // NÃO registra undo automático para filtros
             baseFilterState = PhotoEditState()
             
         case .sliders:
-            print("[Filter] Removing slider filter")
             // NÃO registra undo automático para filtros
             editState = PhotoEditState()
             
         case .none:
-            print("[Filter] Filter not currently applied, nothing to remove")
+            break
         }
     }
     
     // MARK: - Filter Management Utilities
     
     func clearBaseFilter() {
-        print("[Filter] Clearing base filter")
         // NÃO registra undo automático para filtros
         baseFilterState = PhotoEditState()
     }
     
     func clearSliderFilter() {
-        print("[Filter] Clearing slider filter")
         // NÃO registra undo automático para filtros
         editState = PhotoEditState()
     }
     
     func clearAllFilters() {
-        print("[Filter] Clearing all filters and adjustments")
         // NÃO registra undo automático para filtros
         baseFilterState = PhotoEditState()
         editState = PhotoEditState()
@@ -885,14 +824,11 @@ class PhotoEditorViewModel: ObservableObject {
         // Inversão de cores opcional (sem duotone)
         let baseImageForInvert = tintedImageWithSkin
         var finalImage: MTIImage
-        print("[FinalImage] Checking colorInvert: \(state.colorInvert)")
         if state.colorInvert > 0.0 {
-            print("[FinalImage] Applying colorInvert filter")
             let invertFilter = MTIColorInvertFilter()
             invertFilter.inputImage = baseImageForInvert
             guard let invertedImage = invertFilter.outputImage else { return nil }
             if state.colorInvert < 1.0 {
-                print("[FinalImage] Blending inverted image with intensity: \(state.colorInvert)")
                 let blendFilter = MTIBlendFilter(blendMode: .normal)
                 blendFilter.inputImage = invertedImage
                 blendFilter.inputBackgroundImage = baseImageForInvert
@@ -900,11 +836,9 @@ class PhotoEditorViewModel: ObservableObject {
                 guard let blendedImage = blendFilter.outputImage else { return nil }
                 finalImage = blendedImage
             } else {
-                print("[FinalImage] Using fully inverted image")
                 finalImage = invertedImage
             }
         } else {
-            print("[FinalImage] No colorInvert applied")
             finalImage = baseImageForInvert
         }
 
@@ -1100,33 +1034,26 @@ class PhotoEditorViewModel: ObservableObject {
         // Filtro de inversão de cores (quando colorInvert > 0)
         let baseImageForInvert = tintedImageWithSkin
         var finalImage: MTIImage
-        print("[Preview] Checking colorInvert: \(state.colorInvert)")
         if state.colorInvert > 0.0 {
-            print("[Preview] Applying colorInvert filter")
             let invertFilter = MTIColorInvertFilter()
             invertFilter.inputImage = baseImageForInvert
-            guard let invertedImage = invertFilter.outputImage else { 
-                print("[Preview] Failed to generate inverted image")
-                return 
+            guard let invertedImage = invertFilter.outputImage else {
+                return
             }
             // Se colorInvert < 1.0, fazemos um blend entre a imagem original e a invertida
             if state.colorInvert < 1.0 {
-                print("[Preview] Blending inverted image with intensity: \(state.colorInvert)")
                 let blendFilter = MTIBlendFilter(blendMode: .normal)
                 blendFilter.inputImage = invertedImage
                 blendFilter.inputBackgroundImage = baseImageForInvert
                 blendFilter.intensity = state.colorInvert
-                guard let blendedImage = blendFilter.outputImage else { 
-                    print("[Preview] Failed to blend inverted image")
-                    return 
+                guard let blendedImage = blendFilter.outputImage else {
+                    return
                 }
                 finalImage = blendedImage
             } else {
-                print("[Preview] Using fully inverted image")
                 finalImage = invertedImage
             }
         } else {
-            print("[Preview] No colorInvert applied")
             finalImage = baseImageForInvert
         }
 

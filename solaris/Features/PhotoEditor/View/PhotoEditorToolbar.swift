@@ -32,7 +32,6 @@ struct CategoryButton: View {
     @Binding var selectedCategory: String
     @Binding var bottomSize: CGFloat
     let targetSize: CGFloat
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
 
     var body: some View {
         Button(action: {
@@ -46,8 +45,8 @@ struct CategoryButton: View {
                     .frame(width: 16, height: 16)
                     .foregroundColor(
                         selectedCategory == category
-                        ? colorSchemeManager.primaryColor
-                        : colorSchemeManager.primaryColor.opacity(0.55)
+                        ? Color.textPrimary
+                        : Color.textSecondary
                     )
                     .scaleEffect(selectedCategory == category ? 1.1 : 1.0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: selectedCategory == category)
@@ -58,8 +57,8 @@ struct CategoryButton: View {
             .liquidGlass(
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous),
                 borderColor: selectedCategory == category
-                    ? colorSchemeManager.primaryColor.opacity(0.6)
-                    : Color.primary.opacity(0.08),
+                    ? Color.borderSelected
+                    : Color.borderSubtle,
                 borderLineWidth: selectedCategory == category ? 2 : 1
             )
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory == category)

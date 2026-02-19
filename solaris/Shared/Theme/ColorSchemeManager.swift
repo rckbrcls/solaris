@@ -15,17 +15,6 @@ class ColorSchemeManager: ObservableObject {
     func updateColorScheme(_ colorScheme: ColorScheme) {
         currentColorScheme = colorScheme
     }
-
-    var primaryColor: Color {
-        currentColorScheme == .dark ? .white : .black
-    }
-
-    var secondaryColor: Color {
-        currentColorScheme == .dark ? .black : .white
-    }
-    
-    // Cor esmeralda para indicadores de filtros aplicados via long press
-    static let emerald = Color(red: 0.1, green: 0.85, blue: 0.55)
 }
 
 struct ColorSchemeObserver: ViewModifier {

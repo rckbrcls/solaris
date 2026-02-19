@@ -59,22 +59,6 @@ final class LumaGrainFilter: NSObject, MTIFilter {
             outputDimensions: inputImage.dimensions,
             outputPixelFormat: outputPixelFormat
         )
-        if out == nil {
-            // Helpful diagnostics if shader functions are missing from the default library.
-            if let device = MTLCreateSystemDefaultDevice() {
-                if let lib = try? device.makeDefaultLibrary(bundle: .main) {
-                    let names = lib.functionNames
-                    print("[LumaGrainFilter] Default metallib functions: \(names)")
-                    let hasV = names.contains("lumaGrainVertex")
-                    let hasF = names.contains("lumaGrainFragment")
-                    print("[LumaGrainFilter] has lumaGrainVertex: \(hasV), has lumaGrainFragment: \(hasF)")
-                } else {
-                    print("[LumaGrainFilter] Failed to load default metallib from bundle.")
-                }
-            } else {
-                print("[LumaGrainFilter] No MTLDevice available.")
-            }
-        }
         return out
     }
 }

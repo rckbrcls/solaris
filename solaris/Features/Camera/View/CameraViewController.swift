@@ -27,9 +27,12 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         // Highest quality for still photos
         captureSession?.sessionPreset = .photo
 
+        let initialPosition: AVCaptureDevice.Position = isFrontCamera.wrappedValue ? .front : .back
+        currentCameraPosition = initialPosition
+
         sessionQueue.async { [weak self] in
             guard let self = self, let session = self.captureSession else { return }
-            guard let videoCaptureDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+            guard let videoCaptureDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: initialPosition),
                   let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice) else { return }
 
             if session.canAddInput(videoInput) {
@@ -183,7 +186,6 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
                 device.videoZoomFactor = clamped
                 device.unlockForConfiguration()
             } catch {
-                print("Error setting zoom factor: \(error)")
             }
         }
     }
@@ -200,7 +202,6 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
                 device.videoZoomFactor = desiredZoomFactor
                 device.unlockForConfiguration()
             } catch {
-                print("Error setting zoom factor")
             }
             DispatchQueue.main.async { gesture.scale = 1.0 }
         }
@@ -294,7 +295,6 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
                 if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = true }
                 device.unlockForConfiguration()
             } catch {
-                print("Error configuring subject-area monitoring: \(error)")
             }
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -337,7 +337,6 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
                 if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = true }
                 device.unlockForConfiguration()
             } catch {
-                print("Focus configuration error: \(error)")
             }
         }
     }
@@ -356,7 +355,6 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
                 device.isSubjectAreaChangeMonitoringEnabled = false
                 device.unlockForConfiguration()
             } catch {
-                print("Lock focus/exposure error: \(error)")
             }
         }
     }

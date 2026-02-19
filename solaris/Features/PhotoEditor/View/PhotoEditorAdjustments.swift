@@ -20,7 +20,6 @@ struct RulerSlider: View {
     @State private var isDragging = false
     @State private var didNotifyBegin = false
     @State private var lastMajorIndexFeedback: Int? = nil
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     let onEditingBegan: (() -> Void)?
     let onEditingEnded: (() -> Void)?
 
@@ -73,7 +72,7 @@ struct RulerSlider: View {
                         let tickW: CGFloat = isMajor ? 3.0 : 1.0
                         let centerX = leftInset + (CGFloat(i) / CGFloat(totalTicks - 1) * sliderWidth)
                         Capsule(style: .continuous)
-                            .fill(isMajor ? colorSchemeManager.primaryColor.opacity(0.85) : colorSchemeManager.primaryColor.opacity(0.55))
+                            .fill(isMajor ? Color.textPrimary.opacity(0.85) : Color.textSecondary)
                             .frame(
                                 width: tickW,
                                 height: isMajor ? rulerHeight : rulerHeight * 0.6
@@ -85,13 +84,13 @@ struct RulerSlider: View {
 
                 // Thumb - posicionamento corrigido para centrar nos ticks
                 RoundedRectangle(cornerRadius: thumbSize / 2.5, style: .continuous)
-                    .fill(.white)
-                    .shadow(color: .white.opacity(0.1), radius: 6, x: 0, y: 2)
+                    .fill(Color.sliderThumb)
+                    .shadow(color: Color.sliderThumbShadow, radius: 6, x: 0, y: 2)
                     .frame(width: thumbSize * 1.2, height: thumbSize)
                     .overlay(
                         Text(format(clampedValue))
                             .font(.caption2.bold())
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.textPlaceholder)
                             .frame(width: thumbSize * 1.2, height: thumbSize)
                     )
                     .offset(x: leftInset + currentX - (thumbSize * 1.2) / 2)
@@ -190,7 +189,6 @@ struct PhotoEditorAdjustments: View {
     var onBeginAdjust: (() -> Void)? = nil
     var onEndAdjust: (() -> Void)? = nil
     @State private var selectedAdjustment: String = "contrast"
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
 
     private var selectedLabel: String {
         adjustments.first(where: { $0.id == selectedAdjustment })?.label ?? ""
@@ -261,7 +259,7 @@ struct PhotoEditorAdjustments: View {
 
     var body: some View {
         VStack {
-            let headerColor = colorSchemeManager.primaryColor.opacity(0.6)
+            let headerColor = Color.textSecondary
             if !selectedLabel.isEmpty {
                 Text(selectedLabel)
                     .font(.caption2)
@@ -279,7 +277,6 @@ struct PhotoEditorAdjustments: View {
                             isSelected: isSelected,
                             onTap: { selectedAdjustment = adj.id }
                         )
-                        .environmentObject(colorSchemeManager)
                     }
                 }
                 .padding(.horizontal)
@@ -345,7 +342,6 @@ struct PhotoEditorAdjustments: View {
 }
 
 private struct InvertToggle: View {
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     @Binding var colorInvert: Float
     var onBegin: (() -> Void)? = nil
     var onEnd: (() -> Void)? = nil
@@ -362,18 +358,18 @@ private struct InvertToggle: View {
                 }) {
                     Text("Off")
                         .font(.callout.bold())
-                        .foregroundColor(colorInvert == 0.0 ? .primary : .secondary)
+                        .foregroundColor(colorInvert == 0.0 ? Color.textPrimary : Color.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
                         .liquidGlass(
                             in: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                            borderColor: colorInvert == 0.0 ? Color.accentColor : Color.primary.opacity(0.08),
+                            borderColor: colorInvert == 0.0 ? Color.actionAccent : Color.borderSubtle,
                             borderLineWidth: colorInvert == 0.0 ? 2 : 1
                         )
                 }
                 .buttonStyle(.plain)
-                
+
                 Button(action: {
                     onBegin?()
                     colorInvert = 1.0
@@ -383,13 +379,13 @@ private struct InvertToggle: View {
                 }) {
                     Text("On")
                         .font(.callout.bold())
-                        .foregroundColor(colorInvert == 1.0 ? .primary : .secondary)
+                        .foregroundColor(colorInvert == 1.0 ? Color.textPrimary : Color.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
                         .liquidGlass(
                             in: RoundedRectangle(cornerRadius: 12, style: .continuous),
-                            borderColor: colorInvert == 1.0 ? Color.accentColor : Color.primary.opacity(0.08),
+                            borderColor: colorInvert == 1.0 ? Color.actionAccent : Color.borderSubtle,
                             borderLineWidth: colorInvert == 1.0 ? 2 : 1
                         )
                 }
@@ -400,7 +396,6 @@ private struct InvertToggle: View {
 }
 
 private struct ColorTintControls: View {
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     @Binding var colorTint: SIMD4<Float>
     @Binding var colorTintSecondary: SIMD4<Float>
     @Binding var isDualToneActive: Bool
@@ -434,9 +429,9 @@ private struct ColorTintControls: View {
             // Indicador de dual tone
             if isDualToneActive {
                 HStack(spacing: 8) {
-                    Text("Dual Tone Ativo")
+                    Text("Dual Tone Active")
                         .font(.caption)
-                        .foregroundColor(colorSchemeManager.primaryColor.opacity(0.7))
+                        .foregroundColor(Color.textSecondary)
                     
                     HStack(spacing: 4) {
                         Circle()
@@ -449,7 +444,7 @@ private struct ColorTintControls: View {
                     
                     Spacer()
                     
-                    Button("Limpar") {
+                    Button("Clear") {
                         onBeginAdjust?()
                         isDualToneActive = false
                         colorTintSecondary = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
@@ -458,11 +453,11 @@ private struct ColorTintControls: View {
                         onEndAdjust?()
                     }
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(Color.actionDestructive)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(colorSchemeManager.primaryColor.opacity(0.06))
+                .background(Color.borderSubtle)
                 .cornerRadius(8)
             }
             
@@ -481,8 +476,8 @@ private struct ColorTintControls: View {
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
                                         .strokeBorder(
-                                            isSelectedPreset ? Color.accentColor :
-                                            isSelectedSecondary ? ColorSchemeManager.emerald : Color.clear,
+                                            isSelectedPreset ? Color.actionAccent :
+                                            isSelectedSecondary ? Color.filterIndicatorDualTone : Color.clear,
                                             lineWidth: 3
                                         )
                                 )
@@ -493,11 +488,11 @@ private struct ColorTintControls: View {
                                             // Indicador para cor primária (tap) - círculo azul
                                             if isSelectedPreset {
                                                 Circle()
-                                                    .fill(Color.accentColor)
+                                                    .fill(Color.actionAccent)
                                                     .frame(width: 10, height: 10)
                                                     .overlay(
                                                         Circle()
-                                                            .fill(Color.white)
+                                                            .fill(Color.textOnAccent)
                                                             .frame(width: 3, height: 3)
                                                     )
                                                     .padding(6)
@@ -508,11 +503,11 @@ private struct ColorTintControls: View {
                                             // Indicador para cor secundária (long press) - círculo verde esmeralda
                                             if isSelectedSecondary {
                                                 Circle()
-                                                    .fill(ColorSchemeManager.emerald)
+                                                    .fill(Color.filterIndicatorDualTone)
                                                     .frame(width: 10, height: 10)
                                                     .overlay(
                                                         Circle()
-                                                            .fill(Color.white)
+                                                            .fill(Color.textOnAccent)
                                                             .frame(width: 3, height: 3)
                                                     )
                                                     .padding(6)
@@ -644,7 +639,7 @@ private struct ColorTintControls: View {
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(Color.accentColor.opacity((colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) })) ? 1 : 0), lineWidth: 3)
+                                    .strokeBorder(Color.actionAccent.opacity((colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) })) ? 1 : 0), lineWidth: 3)
                             )
                             .overlay(
                                 // Indicadores de feedback visual no ColorPicker (mesmo estilo dos filtros)
@@ -653,11 +648,11 @@ private struct ColorTintControls: View {
                                         // Indicador para cor primária quando usar ColorPicker customizado
                                         if colorTint.w > 0 && !tintPresets.contains(where: { colorEquals($0, colorTint) }) {
                                             Circle()
-                                                .fill(Color.accentColor)
+                                                .fill(Color.actionAccent)
                                                 .frame(width: 10, height: 10)
                                                 .overlay(
                                                     Circle()
-                                                        .fill(Color.white)
+                                                        .fill(Color.textOnAccent)
                                                         .frame(width: 3, height: 3)
                                                 )
                                                 .padding(6)
@@ -668,11 +663,11 @@ private struct ColorTintControls: View {
                                         // Indicador para dual tone ativo
                                         if isDualToneActive {
                                             Circle()
-                                                .fill(ColorSchemeManager.emerald)
+                                                .fill(Color.filterIndicatorDualTone)
                                                 .frame(width: 10, height: 10)
                                                 .overlay(
                                                     Circle()
-                                                        .fill(Color.white)
+                                                        .fill(Color.textOnAccent)
                                                         .frame(width: 3, height: 3)
                                                 )
                                                 .padding(6)
@@ -705,10 +700,10 @@ private struct ColorTintControls: View {
                     }
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.actionDestructive)
                         .frame(width: 24, height: 24)
                         .padding(10)
-                        .background(colorSchemeManager.primaryColor.opacity(0.06))
+                        .background(Color.borderSubtle)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
@@ -733,16 +728,15 @@ private struct ColorTintControls: View {
 }
 
 private struct AdjustmentIconButton: View {
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
     let icon: String
     let isActive: Bool
     let isSelected: Bool
     let onTap: () -> Void
-    
+
     var body: some View {
         let iconColor: Color = (isSelected || isActive)
-            ? colorSchemeManager.primaryColor
-            : colorSchemeManager.primaryColor.opacity(0.55)
+            ? Color.textPrimary
+            : Color.textSecondary
         return Button(action: onTap) {
             VStack {
                 Image(systemName: icon)
@@ -757,13 +751,13 @@ private struct AdjustmentIconButton: View {
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous),
                 borderColor:
                     isSelected
-                    ? colorSchemeManager.primaryColor.opacity(0.6)
-                    : Color.primary.opacity(0.08),
+                    ? Color.borderSelected
+                    : Color.borderSubtle,
                 borderLineWidth: isSelected ? 2 : 1
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.black.opacity(0.65))
+                    .fill(Color.overlayDimming)
                     .blendMode(.overlay)
                     .opacity(isActive ? 1 : 0)
                     .allowsHitTesting(false)

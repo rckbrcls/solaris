@@ -65,9 +65,9 @@ struct PhotoEditorMainImage: View {
                         Spacer(minLength: 0)
                     }
                 } else {
-                    Text("Carregue ou selecione uma imagem para editar")
+                    Text("Load or select an image to edit")
                         .font(.headline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color.textPlaceholder)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 }
                 

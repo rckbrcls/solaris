@@ -29,7 +29,7 @@ struct BoxBlankStyle: ViewModifier {
             .cornerRadius(cornerRadius)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.primary.opacity(0.3), lineWidth: 1)
+                    .stroke(Color.borderStrong, lineWidth: 1)
                     .frame(maxWidth: maxWidth ?? width, maxHeight: maxHeight ?? height)
                     .allowsHitTesting(false)
             )

@@ -12,7 +12,7 @@
 		2CB568AA2C7CB9B50027924C /* SolarisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568A92C7CB9B50027924C /* SolarisApp.swift */; };
 		2CB568AE2C7CB9B70027924C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2CB568AD2C7CB9B70027924C /* Assets.xcassets */; };
 		2CB568B12C7CB9B70027924C /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2CB568B02C7CB9B70027924C /* Preview Assets.xcassets */; };
-		2CB568B32C7CB9B70027924C /* Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568B22C7CB9B70027924C /* Persistence.swift */; };
+
 		2CB568C02C7CB9B70027924C /* solarisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568BF2C7CB9B70027924C /* solarisTests.swift */; };
 		2CB568CA2C7CB9B70027924C /* solarisUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568C92C7CB9B70027924C /* solarisUITests.swift */; };
 		2CB568CC2C7CB9B70027924C /* solarisUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB568CB2C7CB9B70027924C /* solarisUITestsLaunchTests.swift */; };
@@ -36,12 +36,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		2C943CA52DA99B870085FA15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+
 		2CB568A62C7CB9B50027924C /* solaris.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = solaris.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CB568A92C7CB9B50027924C /* SolarisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolarisApp.swift; sourceTree = "<group>"; };
 		2CB568AD2C7CB9B70027924C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2CB568B02C7CB9B70027924C /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		2CB568B22C7CB9B70027924C /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
+
 		2CB568BB2C7CB9B70027924C /* solarisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = solarisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2CB568BF2C7CB9B70027924C /* solarisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = solarisTests.swift; sourceTree = "<group>"; };
 		2CB568C52C7CB9B70027924C /* solarisUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = solarisUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -61,8 +61,8 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2C0369E42E36FA11009990C4 /* Features */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Features; sourceTree = "<group>"; };
-		2C0369FB2E36FA1D009990C4 /* Models */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Models; sourceTree = "<group>"; };
 		2C0369FA2E36FA1C009990C4 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Shared; sourceTree = "<group>"; };
+
 		2CD17E262DEA0B4D00D398A2 /* Preview Content */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (2CD17E782DEA8B9E00D398A2 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = "Preview Content"; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -93,7 +93,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-			2CB5689D2C7CB9B50027924C = {
+		2CB5689D2C7CB9B50027924C = {
 			isa = PBXGroup;
 			children = (
 				2CB568A82C7CB9B50027924C /* solaris */,
@@ -117,13 +117,10 @@
 			isa = PBXGroup;
 			children = (
 				2CD17E262DEA0B4D00D398A2 /* Preview Content */,
-				2C943CA52DA99B870085FA15 /* Info.plist */,
 				2CB568A92C7CB9B50027924C /* SolarisApp.swift */,
 				2CB568AD2C7CB9B70027924C /* Assets.xcassets */,
-				2CB568B22C7CB9B70027924C /* Persistence.swift */,
 				2CB568AF2C7CB9B70027924C /* Preview Content */,
 				2C0369E42E36FA11009990C4 /* Features */,
-				2C0369FB2E36FA1D009990C4 /* Models */,
 				2C0369FA2E36FA1C009990C4 /* Shared */,
 			);
 			path = solaris;
@@ -171,7 +168,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				2C0369E42E36FA11009990C4 /* Features */,
-				2C0369FB2E36FA1D009990C4 /* Models */,
 				2C0369FA2E36FA1C009990C4 /* Shared */,
 				2CD17E262DEA0B4D00D398A2 /* Preview Content */,
 			);
@@ -294,7 +290,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2CB568B32C7CB9B70027924C /* Persistence.swift in Sources */,
 				2CB568AA2C7CB9B50027924C /* SolarisApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -465,13 +460,11 @@
 				DEVELOPMENT_ASSET_PATHS = "\"solaris/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = solaris/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = solaris;
+				INFOPLIST_KEY_CFBundleDisplayName = Solaris;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can snap some cool pics 😄";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Solaris uses your camera to capture photos for editing.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Solaris saves edited photos to your Photo Library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Solaris needs access to your Photo Library to import photos for editing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -501,13 +494,11 @@
 				DEVELOPMENT_ASSET_PATHS = "\"solaris/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = solaris/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = solaris;
+				INFOPLIST_KEY_CFBundleDisplayName = Solaris;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera so you can snap some cool pics 😄";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Mind if we check out your photos? Just to let you pick an awesome image 😌";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Solaris uses your camera to capture photos for editing.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Solaris saves edited photos to your Photo Library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Solaris needs access to your Photo Library to import photos for editing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -667,7 +658,6 @@
 			productName = MetalPetal;
 		};
 /* End XCSwiftPackageProductDependency section */
-
 	};
 	rootObject = 2CB5689E2C7CB9B50027924C /* Project object */;
 }

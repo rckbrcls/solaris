@@ -17,6 +17,7 @@ extension FilterPreset {
 }
 
 enum FilterGroup: String, CaseIterable {
+    case saved = "Saved"
     case all = "All"
     case classics = "Classics"
     case cinema = "Cinema"
@@ -42,7 +43,7 @@ struct PhotoEditorFilters: View {
     @State private var selectedGroup: FilterGroup = .all
     @State private var stage: Stage = .groups
     @State private var selectedPresetID: String? = nil
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
+    @ObservedObject private var savedFiltersStore = SavedFiltersStore.shared
 
     enum Stage { case groups, presets }
 
@@ -616,6 +617,38 @@ struct PhotoEditorFilters: View {
         ]
     }
 
+    private var savedPresets: [FilterPreset] {
+        savedFiltersStore.filters.map { record in
+            FilterPreset(
+                id: "saved_\(record.id)",
+                name: record.name,
+                subtitle: nil,
+                swatch: swatchColors(from: record.state),
+                state: record.state
+            )
+        }
+    }
+
+    private func swatchColors(from state: PhotoEditState) -> [Color] {
+        let tint = state.colorTint
+        if tint.x > 0 || tint.y > 0 || tint.z > 0 {
+            let primary = Color(red: Double(tint.x), green: Double(tint.y), blue: Double(tint.z))
+            if state.isDualToneActive {
+                let sec = state.colorTintSecondary
+                let secondary = Color(red: Double(sec.x), green: Double(sec.y), blue: Double(sec.z))
+                return [primary, secondary]
+            }
+            return [primary, primary.opacity(0.5)]
+        }
+        if state.saturation < 0.5 {
+            return [.gray, .white]
+        }
+        if state.contrast > 1.2 {
+            return [.black, .white]
+        }
+        return [Color.actionAccent.opacity(0.6), Color.actionAccent.opacity(0.4)]
+    }
+
     var body: some View {
         ZStack {
             if stage == .groups {
@@ -639,11 +672,12 @@ struct PhotoEditorFilters: View {
     }
 
     private var allPresets: [FilterPreset] {
-        return classicsPresets + cinemaPresets + vintagePresets + portraitPresets + streetPresets + dostPresets
+        return savedPresets + classicsPresets + cinemaPresets + vintagePresets + portraitPresets + streetPresets + dostPresets
     }
 
     private func presetsForSelected() -> [FilterPreset] {
         switch selectedGroup {
+        case .saved: return savedPresets
         case .all: return allPresets
         case .classics: return classicsPresets
         case .cinema: return cinemaPresets
@@ -656,6 +690,7 @@ struct PhotoEditorFilters: View {
 
     private func groupDescription(for group: FilterGroup) -> String {
         switch group {
+        case .saved: return "Your filters"
         case .all: return "All filters"
         case .classics: return "Classic filters"
         case .cinema: return "Cinematic effects"
@@ -667,8 +702,6 @@ struct PhotoEditorFilters: View {
     }
 
     private func applyPreset(_ preset: FilterPreset) {
-        // Long press: aplica filtro nos sliders (editState)
-        print("[Filter UI] Long press on: \(preset.name)")
         let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
         impactFeedback.impactOccurred()
         
@@ -679,8 +712,6 @@ struct PhotoEditorFilters: View {
     }
     
     private func applyPresetVisualOnly(_ preset: FilterPreset) {
-        // Tap simples: aplica filtro como base visual (baseFilterState)
-        print("[Filter UI] Tap on: \(preset.name)")
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
         impactFeedback.impactOccurred()
         
@@ -697,12 +728,12 @@ struct PhotoEditorFilters: View {
         
         // Prioriza slider filter (verde esmeralda)
         if isAppliedToSliders {
-            return ColorSchemeManager.emerald
+            return Color.filterIndicatorDualTone
         }
         
         // Depois base filter (azul accent)
         if isAppliedAsBase {
-            return Color.accentColor
+            return Color.actionAccent
         }
         
         return Color.clear
@@ -719,11 +750,18 @@ struct PhotoEditorFilters: View {
     }
 
     // MARK: - Views
+    private var visibleGroups: [FilterGroup] {
+        FilterGroup.allCases.filter { group in
+            if group == .saved { return !savedFiltersStore.isEmpty }
+            return true
+        }
+    }
+
     private var groupList: some View {
         VStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(FilterGroup.allCases, id: \.self) { g in
+                    ForEach(visibleGroups, id: \.self) { g in
                         Button(action: {
                             withAnimation { selectedGroup = g; selectedPresetID = nil; stage = .presets }
                         }) {
@@ -731,16 +769,16 @@ struct PhotoEditorFilters: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(g.rawValue)
                                         .font(.body.bold())
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(Color.textPrimary)
                                         .lineLimit(1)
                                     Text(groupDescription(for: g))
                                         .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color.textSecondary)
                                         .lineLimit(1)
                                 }
                                 Spacer(minLength: 8)
                                 Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Color.textSecondary)
                             }
                             .padding(.vertical, 10)
                             .padding(.horizontal, 12)
@@ -761,10 +799,10 @@ struct PhotoEditorFilters: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.caption)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Color.textPrimary)
                         Text("Back")
                             .font(.caption2)
-                            .foregroundColor(.primary)
+                            .foregroundColor(Color.textPrimary)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 10)
@@ -806,10 +844,10 @@ struct PhotoEditorFilters: View {
                                         HStack {
                                             Text(badgeText(for: preset))
                                                 .font(.system(size: 9, weight: .black, design: .rounded))
-                                                .foregroundColor(.white)
+                                                .foregroundColor(Color.textOnAccent)
                                                 .padding(.horizontal, 6)
                                                 .padding(.vertical, 3)
-                                                .background(Color.black.opacity(0.55), in: Capsule())
+                                                .background(Color.filterTagBackground, in: Capsule())
                                                 .padding(4)
                                             Spacer()
                                         }
@@ -821,11 +859,11 @@ struct PhotoEditorFilters: View {
                                             // Indicador para filtro base (tap simples) - círculo azul
                                             if shouldShowBaseIndicator(for: preset) {
                                                 Circle()
-                                                    .fill(Color.accentColor)
+                                                    .fill(Color.actionAccent)
                                                     .frame(width: 10, height: 10)
                                                     .overlay(
                                                         Circle()
-                                                            .fill(Color.white)
+                                                            .fill(Color.textOnAccent)
                                                             .frame(width: 3, height: 3)
                                                     )
                                                     .padding(6)
@@ -836,11 +874,11 @@ struct PhotoEditorFilters: View {
                                             // Indicador para filtro nos sliders (long press) - círculo verde esmeralda
                                             if shouldShowSliderIndicator(for: preset) {
                                                 Circle()
-                                                    .fill(ColorSchemeManager.emerald)
+                                                    .fill(Color.filterIndicatorDualTone)
                                                     .frame(width: 10, height: 10)
                                                     .overlay(
                                                         Circle()
-                                                            .fill(Color.white)
+                                                            .fill(Color.textOnAccent)
                                                             .frame(width: 3, height: 3)
                                                     )
                                                     .padding(6)
@@ -864,14 +902,28 @@ struct PhotoEditorFilters: View {
                             }
                             Text(preset.name)
                                 .font(.caption2.bold())
-                                .foregroundColor(.primary)
+                                .foregroundColor(Color.textPrimary)
                                 .lineLimit(1)
                         }
                         .frame(width: 62)
+                        .contextMenu {
+                            if selectedGroup == .saved {
+                                Button(role: .destructive) {
+                                    let recordID = String(preset.id.dropFirst("saved_".count))
+                                    savedFiltersStore.deleteFilter(id: recordID)
+                                } label: {
+                                    Label("Delete Filter", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 12) // Aumentado para acomodar o stroke de 3pt
             }
+        }
+        .onChange(of: savedFiltersStore.filters.count) { _ in
+            thumbs.removeAll(keepingCapacity: true)
+            scheduleThumbRenders()
         }
     }
 
@@ -990,7 +1042,7 @@ struct PhotoEditorFilters: View {
                 f.grain = state.grain
                 f.grainSize = state.grainSize
                 f.outputPixelFormat = .bgra8Unorm
-                if let outImage = f.outputImage { mtiImage = outImage } else { print("[Thumbnails] LumaGrainFilter produced nil output.") }
+                if let outImage = f.outputImage { mtiImage = outImage }
             }
             let out = try mtiContext.makeCGImage(from: mtiImage)
             return UIImage(cgImage: out, scale: scaled.scale, orientation: .up)

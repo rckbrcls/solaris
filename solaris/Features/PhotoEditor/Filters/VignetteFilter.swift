@@ -40,15 +40,6 @@ final class VignetteFilter: NSObject, MTIFilter {
             outputDimensions: inputImage.dimensions,
             outputPixelFormat: outputPixelFormat
         )
-        if out == nil {
-            if let device = MTLCreateSystemDefaultDevice() {
-                if let lib = try? device.makeDefaultLibrary(bundle: .main) {
-                    print("[VignetteFilter] Default metallib functions: \(lib.functionNames)")
-                } else {
-                    print("[VignetteFilter] Failed to load default metallib from bundle.")
-                }
-            }
-        }
         return out
     }
 }

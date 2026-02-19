@@ -4,36 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
-This is an iOS app built with Xcode. Open `solaris.xcworkspace` (not `.xcodeproj` — CocoaPods workspace is required).
+This is an iOS app built with Xcode. Open `solaris.xcodeproj` directly (no CocoaPods — only SPM).
 
 ```bash
-# Install CocoaPods dependencies (first time or after Podfile changes)
-pod install
-
 # Build from command line
-xcodebuild -workspace solaris.xcworkspace -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+xcodebuild -project solaris.xcodeproj -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 
 # Run tests
-xcodebuild -workspace solaris.xcworkspace -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+xcodebuild -project solaris.xcodeproj -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 
 # Run a single test
-xcodebuild -workspace solaris.xcworkspace -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:solarisTests/solarisTests/testExample test
+xcodebuild -project solaris.xcodeproj -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:solarisTests/solarisTests/testExample test
 ```
 
-Deployment target: iOS 26.0. SPM dependencies (MetalPetal, FluidGradient) are resolved automatically by Xcode. CocoaPods 1.15.2+ required. Tests are currently template stubs with minimal coverage.
+Deployment target: iOS 26.0. SPM dependencies (MetalPetal, FluidGradient) are resolved automatically by Xcode. Tests are currently template stubs with minimal coverage.
 
 ## Architecture
 
-**Feature-based MVVM** with SwiftUI as the primary UI framework and UIKit for camera (AVFoundation). App entry point is `SolarisApp.swift` (`@main`), which initializes `ColorSchemeManager` as a state object and configures the SwiftData container.
+**Feature-based MVVM** with SwiftUI as the primary UI framework and UIKit for camera (AVFoundation). App entry point is `SolarisApp.swift` (`@main`), which initializes `ColorSchemeManager` as a state object.
 
 ### Feature Modules (`solaris/Features/`)
 
+- **Home** — Main screen with photo grid. `HomeView` (renamed from ContentView) displays `PhotosScrollView` with `PhotoGridItem` cells. Handles photo import, camera launch, and editor navigation.
 - **Camera** — Photo capture using AVFoundation. `CameraViewController` (UIKit) is wrapped via `CameraPreview` (UIViewControllerRepresentable) and presented from `PhotoCaptureView` (SwiftUI). Camera events (capture, switch) use `NotificationCenter`.
 - **PhotoEditor** — GPU-accelerated image editing. `PhotoEditorViewModel` manages edit state with undo/redo stacks. Filters use MetalPetal with custom Metal shaders (`Filters/`, `Processing/Shaders/`). Filter presets are defined in `PhotoEditorFilters.swift`.
+- **Settings** — App settings screen. `SettingsView` manages user preferences.
 
 ### Shared Layer (`solaris/Shared/`)
 
-- **State** — `AppSettings` singleton persists user preferences via UserDefaults (color space, raw handling, metadata preservation, front camera mirroring).
+- **State** — `AppSettings` singleton persists user preferences via UserDefaults (color space, raw handling, metadata preservation, front camera mirroring). `SavedFiltersStore` manages user-saved filter presets.
+- **Services** — `ImageIOService.swift` contains image I/O utilities: HEIC export, full-quality loading, RAW detection, metadata-preserving writes, thumbnail generation, and format detection.
 - **Theme** — `ColorSchemeManager` (environment object injected at app root) manages light/dark mode. `LiquidGlassModifier` provides glass-effect styling with iOS 26+ native support and fallback.
 - **Components** — Reusable UI: `ImageCache` (NSCache, 50MB/500 items), `ZoomableModifier`, `LoadingOverlay`, `ActivityView`.
 
@@ -49,7 +49,7 @@ Photos are stored as files, not in a database:
 └── manifest.json # PhotoManifest registry
 ```
 
-`PhotoLibrary` (singleton) manages all file I/O with atomic writes. `PhotoRecord` tracks each photo's URLs and `PhotoEditState` (all edit parameters as Codable struct). SwiftData is configured (`Item` model, `Persistence.swift`) but the primary storage is file-based.
+`PhotoLibrary` (singleton) manages all file I/O with atomic writes. `PhotoRecord` tracks each photo's URLs and `PhotoEditState` (all edit parameters as Codable struct).
 
 ### Key Patterns
 
@@ -60,7 +60,7 @@ Photos are stored as files, not in a database:
 
 ### Navigation Flow
 
-`ContentView` → photo grid (`PhotosScrollView`) with NavigationStack. Camera opens as `fullScreenCover`. Editor via `navigationDestination`. Settings via `sheet`.
+`HomeView` → photo grid (`PhotosScrollView`) with NavigationStack. Camera opens as `fullScreenCover`. Editor via `navigationDestination`. Settings via `sheet`.
 
 ### Filter Presets
 
