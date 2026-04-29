@@ -7,10 +7,11 @@ struct SavedFilterRecord: Codable, Identifiable, Equatable {
     let createdAt: Date
 }
 
-final class SavedFiltersStore: ObservableObject {
+@Observable
+final class SavedFiltersStore {
     static let shared = SavedFiltersStore()
 
-    @Published private(set) var filters: [SavedFilterRecord] = []
+    private(set) var filters: [SavedFilterRecord] = []
 
     var isEmpty: Bool { filters.isEmpty }
 

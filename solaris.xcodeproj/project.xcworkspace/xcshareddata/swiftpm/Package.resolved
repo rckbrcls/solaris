@@ -1,5 +1,5 @@
 {
-  "originHash" : "b0fcd450174b633c492ffd2aac56183341527713dde01ba3127a6dd4c6d0a481",
+  "originHash" : "6a2c335217e586752e275e2f182b4164dcf6e47a2dd7f7de67082a926412760b",
   "pins" : [
     {
       "identity" : "fluidgradient",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "f9b78897bd4214bb097f352a1bde0a4f4a1e2ddb",
         "version" : "1.25.2"
+      }
+    },
+    {
+      "identity" : "swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/phosphor-icons/swift",
+      "state" : {
+        "revision" : "9a9467181782bbe319ad4935d0993c77cd8a5fbc",
+        "version" : "2.1.0"
       }
     }
   ],

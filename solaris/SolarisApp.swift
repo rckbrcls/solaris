@@ -1,20 +1,24 @@
-//
-//  SolarisApp.swift
-//  solaris
-//
-//  Created by Erick Barcelos on 26/08/24.
-//
-
 import SwiftUI
 
 @main
 struct SolarisApp: App {
-    @StateObject private var colorSchemeManager = ColorSchemeManager()
+    @State private var colorSchemeManager = ColorSchemeManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             HomeView()
-                .environmentObject(colorSchemeManager)
+                .environment(colorSchemeManager)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                NotificationCenter.default.post(name: .pauseCameraSession, object: nil)
+            case .active:
+                NotificationCenter.default.post(name: .resumeCameraSession, object: nil)
+            default:
+                break
+            }
         }
     }
 }

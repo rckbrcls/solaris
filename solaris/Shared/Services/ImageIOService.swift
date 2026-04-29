@@ -40,7 +40,7 @@ func loadUIImageFullQuality(from data: Data) -> UIImage? {
     let props = CGImageSourceCopyPropertiesAtIndex(source, 0, propertiesOptions) as? [CFString: Any]
     let exifOrientation = (props?[kCGImagePropertyOrientation] as? UInt32) ?? 1
 
-    let scale: CGFloat = UIScreen.main.scale
+    let scale: CGFloat = UITraitCollection.current.displayScale
     let createOpts: [CFString: Any] = [
         kCGImageSourceShouldAllowFloat: true,
         kCGImageSourceShouldCacheImmediately: false
@@ -73,6 +73,14 @@ extension UIImage.Orientation {
 // MARK: - Format detection
 
 func detectImageExtension(data: Data) -> String {
+    // Prefer CGImageSource UTType detection — handles HEIF variants, TIFF, WebP, AVIF, RAW, etc.
+    if let source = CGImageSourceCreateWithData(data as CFData, nil),
+       let uti = CGImageSourceGetType(source) as? String,
+       let utType = UTType(uti),
+       let ext = utType.preferredFilenameExtension {
+        return ext
+    }
+    // Fallback: magic bytes for common formats
     if data.starts(with: [0xFF, 0xD8, 0xFF]) { return "jpg" }
     if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return "png" }
     if data.starts(with: [0x00, 0x00, 0x00, 0x18]) || data.starts(with: [0x00, 0x00, 0x00, 0x1C]) { return "heic" }
@@ -124,9 +132,28 @@ fileprivate func convertUIImage(_ image: UIImage, to colorSpace: CGColorSpace, i
     guard let cg = image.cgImage else { return nil }
     let width = cg.width
     let height = cg.height
+    // Preserve source bit depth: use 16-bit for wide/HDR sources (supports 10-bit HEIC export)
+    let sourceBPC = cg.bitsPerComponent
+    let bpc = sourceBPC >= 16 ? 16 : sourceBPC > 8 ? 16 : 8
     let alphaInfo: CGImageAlphaInfo = includeAlpha ? .premultipliedLast : .noneSkipLast
-    let bitmapInfo = alphaInfo.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-    guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: bitmapInfo) else { return nil }
+    var bitmapInfo: UInt32 = alphaInfo.rawValue
+    if bpc == 16 {
+        bitmapInfo |= CGBitmapInfo.floatComponents.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
+    } else {
+        bitmapInfo |= CGBitmapInfo.byteOrder32Big.rawValue
+    }
+    guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: bpc, bytesPerRow: 0, space: colorSpace, bitmapInfo: bitmapInfo) else {
+        // Fallback: 8-bit if native depth fails
+        let fallbackInfo = alphaInfo.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        guard let fallbackCtx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: fallbackInfo) else { return nil }
+        if !includeAlpha {
+            fallbackCtx.setFillColor(UIColor.white.cgColor)
+            fallbackCtx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        fallbackCtx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let outCG = fallbackCtx.makeImage() else { return nil }
+        return UIImage(cgImage: outCG, scale: image.scale, orientation: .up)
+    }
     if !includeAlpha {
         ctx.setFillColor(UIColor.white.cgColor)
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
@@ -174,7 +201,7 @@ func loadUIImageThumbnail(from data: Data, maxPixel: Int) -> UIImage? {
         kCGImageSourceShouldCacheImmediately: false
     ]
     if let cgThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
-        return UIImage(cgImage: cgThumb, scale: UIScreen.main.scale, orientation: .up)
+        return UIImage(cgImage: cgThumb, scale: UITraitCollection.current.displayScale, orientation: .up)
     }
     return nil
 }

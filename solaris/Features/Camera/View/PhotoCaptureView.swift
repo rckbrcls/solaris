@@ -1,7 +1,6 @@
 import SwiftUI
 import AVFoundation
-import Foundation
-import UIKit  // Adicionado para garantir que UIImage está disponível
+import UIKit
 
 // Reusable shutter button with consistent style and press feedback
 private struct ShutterButton: View {
@@ -15,7 +14,7 @@ private struct ShutterButton: View {
                 borderColor: Color.borderSubtle
             )
             .contentShape(Circle())
-        .accessibilityLabel("Capturar foto")
+        .accessibilityLabel(String(localized: "Capture photo"))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -29,33 +28,14 @@ private struct PressScaleStyle: ButtonStyle {
     }
 }
 
-// Estilo consistente para ícones redondos na câmera
-private struct CameraIconButtonStyle: ViewModifier {
-    var size: CGFloat = 44
-    var foreground: Color = .textPrimary
-
-    func body(content: Content) -> some View {
-        content
-            .foregroundColor(foreground)
-            .frame(width: size, height: size)
-            .liquidGlass(in: Circle(), borderColor: Color.borderStrong)
-            .contentShape(Circle())
-    }
-}
-
-private extension View {
-    func cameraIconStyle(size: CGFloat = 44, foreground: Color = .textPrimary) -> some View {
-        modifier(CameraIconButtonStyle(size: size, foreground: foreground))
-    }
-}
+// Icon button style consolidated in Shared/Components/GlassIconStyle.swift
 
 enum AspectOption: String, CaseIterable, Identifiable, Codable {
     case square = "1:1"
-    case ratio4x3 = "4:3"   // portrait
-    case ratio3x2 = "3:2"   // portrait
-    case ratio9x16 = "9:16" // portrait
+    case ratio4x3 = "4:3"
+    case ratio3x2 = "3:2"
+    case ratio9x16 = "9:16"
     var id: String { rawValue }
-    // Returns width:height factors (portrait-aware)
     var width: CGFloat {
         switch self {
         case .square: return 1
@@ -76,32 +56,105 @@ enum AspectOption: String, CaseIterable, Identifiable, Codable {
 
 struct PhotoCaptureView: View {
     var onPhotoCaptured: (Data, String, Bool) -> Void
-    @State private var capturedImage: UIImage? = nil
-    @State private var capturedPhotoData: (Data, String)? = nil
-    @State private var isPhotoTaken: Bool = false
     @State private var isFlashOn: Bool = AppSettings.shared.cameraFlashOn
     @State private var isGridOn: Bool = AppSettings.shared.cameraGridOn
     @State private var zoomFactor: CGFloat = 1.0
     @State private var isFrontCamera: Bool = AppSettings.shared.cameraUseFrontCamera
     @State private var selectedAspect: AspectOption = AppSettings.shared.cameraAspectRatio
     @State private var showAspectMenu: Bool = false
+    @State private var cameraPermission: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    @State private var cameraCommands = CameraCommands()
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         ZStack {
             Color.backgroundPrimary.ignoresSafeArea()
-            VStack {
+            switch cameraPermission {
+            case .authorized:
+                cameraContent
+            case .notDetermined:
+                Color.backgroundPrimary.ignoresSafeArea()
+                    .onAppear { requestCameraAccess() }
+            default:
+                permissionDeniedView
+            }
+        }
+    }
+
+    private func requestCameraAccess() {
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async {
+                cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
+            }
+        }
+    }
+
+    private var permissionDeniedView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "camera.slash")
+                .font(.system(size: 56))
+                .foregroundColor(Color.textSecondary)
+            Text(String(localized: "Camera Access Required"))
+                .font(.title3.bold())
+                .foregroundColor(Color.textPrimary)
+            Text(String(localized: "Solaris needs camera access to capture photos. Please enable it in Settings."))
+                .font(.subheadline)
+                .foregroundColor(Color.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            Button(action: {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }) {
+                Text(String(localized: "Open Settings"))
+                    .font(.body.bold())
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 12)
+                    .background(Color.actionAccent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundColor(Color.textOnAccent)
+            }
+            Spacer()
+            Button(action: { dismiss() }) {
+                Text(String(localized: "Close"))
+                    .font(.body)
+                    .foregroundColor(Color.textSecondary)
+            }
+            .padding(.bottom, 40)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var cameraContent: some View {
+        GeometryReader { outerGeo in
+            let previewW = outerGeo.size.width
+            cameraContentInner(previewW: previewW)
+        }
+    }
+
+    private func cameraContentInner(previewW: CGFloat) -> some View {
+        VStack {
                 ZStack {
-                    let previewW = UIScreen.main.bounds.width
                     let previewH: CGFloat = previewW * (selectedAspect.height / max(1, selectedAspect.width))
-                    CameraPreview(capturedImage: $capturedImage, capturedPhotoData: $capturedPhotoData, isPhotoTaken: $isPhotoTaken, isFlashOn: $isFlashOn, zoomFactor: $zoomFactor, isFrontCamera: $isFrontCamera)
+                    CameraPreview(
+                        onPhotoCaptured: { data, ext, thumbnail in
+                            dismiss()
+                            onPhotoCaptured(data, ext, isFrontCamera)
+                        },
+                        onCameraSwitched: { isFront in
+                            isFrontCamera = isFront
+                        },
+                        flashEnabled: isFlashOn,
+                        zoomFactor: zoomFactor,
+                        commands: cameraCommands
+                    )
                         .frame(width: previewW, height: previewH)
                         .animation(.easeInOut(duration: 0.22), value: selectedAspect)
                         .clipped()
                         .cornerRadius(20)
 
                     if isGridOn {
-                        // Grid must match the preview's frame to follow aspect changes
                         GeometryReader { geo in
                             let width = geo.size.width
                             let height = geo.size.height
@@ -115,12 +168,10 @@ struct PhotoCaptureView: View {
                                 let rowHeight = h / 3
 
                                 var path = Path()
-                                // Vertical lines
                                 path.move(to: CGPoint(x: columnWidth, y: 0))
                                 path.addLine(to: CGPoint(x: columnWidth, y: h))
                                 path.move(to: CGPoint(x: 2 * columnWidth, y: 0))
                                 path.addLine(to: CGPoint(x: 2 * columnWidth, y: h))
-                                // Horizontal lines
                                 path.move(to: CGPoint(x: 0, y: rowHeight))
                                 path.addLine(to: CGPoint(x: w, y: rowHeight))
                                 path.move(to: CGPoint(x: 0, y: 2 * rowHeight))
@@ -139,13 +190,11 @@ struct PhotoCaptureView: View {
 
                     VStack(spacing: 8) {
                         HStack {
-                            Button(action: {
-                                dismiss()
-                            }) {
+                            Button(action: { dismiss() }) {
                                 Image(systemName: "xmark")
-                                    .cameraIconStyle()
+                                    .glassIconStyle()
                             }
-
+                            .accessibilityLabel(String(localized: "Close camera"))
                             Spacer()
                         }
                         .padding(.horizontal, 16)
@@ -153,25 +202,20 @@ struct PhotoCaptureView: View {
                         Spacer()
                         HStack(alignment: .center) {
                             Spacer()
-
-                            Button(action: {
-                                NotificationCenter.default.post(name: .capturePhoto, object: nil)
-                            }) {
+                            Button(action: { cameraCommands.capture() }) {
                                 ShutterButton()
                                     .scaleEffect(1.0)
                             }
                             .padding(20)
                             .offset(y: 14)
                             .buttonStyle(PressScaleStyle())
-
                             Spacer()
-                            // Additional button or user-selected functionality can be placed here
                         }
                     }
-                    .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * 16.0 / 9.0)
+                    .frame(width: previewW, height: previewW * 16.0 / 9.0)
                 }
 
-                // Bottom overlay controls: grid, flash, aspect, switch
+                // Bottom overlay controls
                 VStack {
                     if showAspectMenu {
                         HStack {
@@ -203,24 +247,27 @@ struct PhotoCaptureView: View {
                     HStack(alignment: .center) {
                         Button(action: { isGridOn.toggle() }) {
                             Image(systemName: isGridOn ? "square.grid.3x3.fill" : "square.grid.3x3")
-                                .cameraIconStyle()
+                                .glassIconStyle()
                         }
+                        .accessibilityLabel(String(localized: "Toggle grid"))
                         Spacer()
                         Button(action: { isFlashOn.toggle() }) {
                             Image(systemName: isFlashOn ? "bolt.fill" : "bolt")
-                                .cameraIconStyle()
+                                .glassIconStyle()
                         }
+                        .accessibilityLabel(String(localized: "Toggle flash"))
                         Spacer()
                         Button(action: { withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { showAspectMenu.toggle() } }) {
                             Image(systemName: "rectangle.split.2x1")
-                                .cameraIconStyle()
-                                .accessibilityLabel("Aspect Ratio")
+                                .glassIconStyle()
+                                .accessibilityLabel(String(localized: "Aspect ratio"))
                         }
                         Spacer()
-                        Button(action: { NotificationCenter.default.post(name: .switchCamera, object: nil) }) {
+                        Button(action: { cameraCommands.switchCamera() }) {
                             Image(systemName: "camera.rotate")
-                                .cameraIconStyle()
+                                .glassIconStyle()
                         }
+                        .accessibilityLabel(String(localized: "Switch camera"))
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
@@ -229,20 +276,14 @@ struct PhotoCaptureView: View {
 
             }
                 .navigationBarBackButtonHidden(true)
-                .onChange(of: isPhotoTaken) { _, taken in
-                    guard taken, let (data, ext) = capturedPhotoData else { return }
-                    dismiss()
-                    onPhotoCaptured(data, ext, isFrontCamera)
-                }
                 .onChange(of: isFlashOn) { _, val in AppSettings.shared.cameraFlashOn = val }
                 .onChange(of: isGridOn) { _, val in AppSettings.shared.cameraGridOn = val }
                 .onChange(of: selectedAspect) { _, val in AppSettings.shared.cameraAspectRatio = val }
                 .onChange(of: isFrontCamera) { _, val in AppSettings.shared.cameraUseFrontCamera = val }
                 .padding(.top)
                 .tint(Color.textPrimary)
-            }
-        }
     }
+}
 
 
 #Preview {

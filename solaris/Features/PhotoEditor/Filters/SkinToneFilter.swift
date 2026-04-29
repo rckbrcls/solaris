@@ -15,24 +15,7 @@ final class SkinToneFilter: NSObject, MTIFilter {
 
     private struct Uniforms { let amount: Float; let softness: Float; let highlightProtect: Float; let saturationThreshold: Float }
 
-    private static let kernel: MTIRenderPipelineKernel = {
-        let bundle = Bundle.main
-        let libURL: URL? = (
-            bundle.url(forResource: "default", withExtension: "metallib") ??
-            (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String).flatMap { bundle.url(forResource: $0, withExtension: "metallib") } ??
-            bundle.urls(forResourcesWithExtension: "metallib", subdirectory: nil)?.first
-        )
-        let vDesc: MTIFunctionDescriptor
-        let fDesc: MTIFunctionDescriptor
-        if let url = libURL {
-            vDesc = MTIFunctionDescriptor(name: "lumaGrainVertex", libraryURL: url)
-            fDesc = MTIFunctionDescriptor(name: "skinToneFragment", libraryURL: url)
-        } else {
-            vDesc = MTIFunctionDescriptor(name: "lumaGrainVertex")
-            fDesc = MTIFunctionDescriptor(name: "skinToneFragment")
-        }
-        return MTIRenderPipelineKernel(vertexFunctionDescriptor: vDesc, fragmentFunctionDescriptor: fDesc)
-    }()
+    private static let kernel: MTIRenderPipelineKernel = MetalFilterHelpers.makeKernel(fragmentFunction: "skinToneFragment")
 
     var outputImage: MTIImage? {
         guard let inputImage else { return nil }

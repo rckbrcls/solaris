@@ -11,28 +11,7 @@ final class LumaGrainFilter: NSObject, MTIFilter {
 
     private struct Uniforms { let strength: Float; let size: Float; let seed: Float; let pad: Float }
 
-    private static let kernel: MTIRenderPipelineKernel = {
-        // Try to point function descriptors to an explicit metallib if present.
-        let bundle = Bundle.main
-        let libURL: URL? = (
-            bundle.url(forResource: "default", withExtension: "metallib") ??
-            (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String).flatMap { bundle.url(forResource: $0, withExtension: "metallib") } ??
-            bundle.urls(forResourcesWithExtension: "metallib", subdirectory: nil)?.first
-        )
-        let vDesc: MTIFunctionDescriptor
-        let fDesc: MTIFunctionDescriptor
-        if let url = libURL {
-            vDesc = MTIFunctionDescriptor(name: "lumaGrainVertex", libraryURL: url)
-            fDesc = MTIFunctionDescriptor(name: "lumaGrainFragment", libraryURL: url)
-        } else {
-            vDesc = MTIFunctionDescriptor(name: "lumaGrainVertex")
-            fDesc = MTIFunctionDescriptor(name: "lumaGrainFragment")
-        }
-        return MTIRenderPipelineKernel(
-            vertexFunctionDescriptor: vDesc,
-            fragmentFunctionDescriptor: fDesc
-        )
-    }()
+    private static let kernel: MTIRenderPipelineKernel = MetalFilterHelpers.makeKernel(fragmentFunction: "lumaGrainFragment")
 
     private func shapedStrength(from grain: Float) -> Float {
         // Map slider 0..0.1 -> 0..1 for better range

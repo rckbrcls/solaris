@@ -1,84 +1,49 @@
 import UIKit
 import AVFoundation
-import SwiftUI
 
-class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
-    var captureSession: AVCaptureSession?
-    var photoOutput: AVCapturePhotoOutput?
-    var previewLayer: AVCaptureVideoPreviewLayer?
-    private let sessionQueue = DispatchQueue(label: "camera.session.queue")
-    var capturedImage: Binding<UIImage?> = .constant(nil)
-    var capturedPhotoData: Binding<(Data, String)?> = .constant(nil)
-    var isPhotoTaken: Binding<Bool> = .constant(false)
-    var isFlashOn: Binding<Bool> = .constant(false)
-    var zoomFactor: Binding<CGFloat> = .constant(1.0)
-    var currentCameraPosition: AVCaptureDevice.Position = .back
-    var isFrontCamera: Binding<Bool> = .constant(false)
-    var flashOverlayView: UIView?
-    // Focus state and UI
+/// Delegate for CameraViewController events — used by the Coordinator.
+protocol CameraViewControllerDelegate: AnyObject {
+    func cameraDidCapture(data: Data, ext: String, thumbnail: UIImage?)
+    func cameraDidSwitchCamera(isFront: Bool)
+}
+
+/// Slim view controller: manages gestures, overlays, and delegates camera logic to CameraService.
+class CameraViewController: UIViewController, CameraServiceDelegate {
+    weak var controllerDelegate: CameraViewControllerDelegate?
+    let cameraService = CameraService()
+
+    var flashEnabled: Bool = false
     private var isFocusLocked: Bool = false
     private var focusIndicatorView: UIView?
+    private var flashOverlayView: UIView?
     private var subjectAreaObserver: NSObjectProtocol?
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Configure capture session on a dedicated queue
-        captureSession = AVCaptureSession()
-        // Highest quality for still photos
-        captureSession?.sessionPreset = .photo
 
-        let initialPosition: AVCaptureDevice.Position = isFrontCamera.wrappedValue ? .front : .back
-        currentCameraPosition = initialPosition
+        cameraService.delegate = self
 
-        sessionQueue.async { [weak self] in
-            guard let self = self, let session = self.captureSession else { return }
-            guard let videoCaptureDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: initialPosition),
-                  let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice) else { return }
-
-            if session.canAddInput(videoInput) {
-                session.addInput(videoInput)
-            }
-
-            let photoOutput = AVCapturePhotoOutput()
-            photoOutput.isHighResolutionCaptureEnabled = true
-            
-            // Configura qualidade máxima
-            photoOutput.maxPhotoQualityPrioritization = .quality
-
-            // Habilita captura em formato máximo disponível
-            photoOutput.isAppleProRAWEnabled = photoOutput.isAppleProRAWSupported
-            
-            if session.canAddOutput(photoOutput) {
-                session.addOutput(photoOutput)
-                DispatchQueue.main.async { self.photoOutput = photoOutput }
-            }
-
-            session.startRunning()
+        // Setup preview layer
+        let previewLayer = AVCaptureVideoPreviewLayer(session: cameraService.session)
+        previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.frame = view.layer.bounds
+        if let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
         }
+        view.layer.addSublayer(previewLayer)
+        cameraService.previewLayer = previewLayer
 
-        // Setup preview on main thread
-        if let cs = captureSession {
-            previewLayer = AVCaptureVideoPreviewLayer(session: cs)
-            previewLayer?.videoGravity = .resizeAspectFill
-            previewLayer?.frame = view.layer.bounds
-            if let connection = previewLayer?.connection, connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
-            }
-            if let pl = previewLayer {
-                view.layer.addSublayer(pl)
-            }
-        }
-        
+        // Flash overlay
         flashOverlayView = UIView(frame: view.bounds)
         flashOverlayView?.backgroundColor = UIColor.white
         flashOverlayView?.alpha = 0
         flashOverlayView?.isUserInteractionEnabled = false
         view.addSubview(flashOverlayView!)
-        if let overlay = flashOverlayView { view.bringSubviewToFront(overlay) }
-        
+
+        // Gestures
         let pinchGesture = UIPinchGestureRecognizer(target: self, action: #selector(handlePinchGesture(_:)))
         view.addGestureRecognizer(pinchGesture)
-        
+
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTapGesture(_:)))
         tapGesture.numberOfTapsRequired = 1
         let doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTapGesture(_:)))
@@ -90,79 +55,124 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressGesture(_:)))
         longPress.minimumPressDuration = 0.5
         view.addGestureRecognizer(longPress)
-        
-        NotificationCenter.default.addObserver(self, selector: #selector(capturePhoto), name: .capturePhoto, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(switchCamera), name: .switchCamera, object: nil)
-        
-        // Enable subject-area monitoring for adaptive AF/AE
-        configureSubjectAreaMonitoring(enabled: true)
+
+        // Configure camera and subject area monitoring
+        let initialPosition: AVCaptureDevice.Position = AppSettings.shared.cameraUseFrontCamera ? .front : .back
+        cameraService.configure(position: initialPosition)
+        cameraService.configureSubjectAreaMonitoring(enabled: true)
+
+        // Listen for app lifecycle notifications (pause/resume camera when app backgrounds)
+        NotificationCenter.default.addObserver(self, selector: #selector(handlePauseSession), name: .pauseCameraSession, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleResumeSession), name: .resumeCameraSession, object: nil)
+
         // Initialize AF/AE to center
         let center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
-        let devicePoint = previewLayer?.captureDevicePointConverted(fromLayerPoint: center) ?? CGPoint(x: 0.5, y: 0.5)
-        setContinuousAutoFocusExposure(at: devicePoint)
-        // startRunning already called on sessionQueue
+        let devicePoint = cameraService.previewLayer?.captureDevicePointConverted(fromLayerPoint: center) ?? CGPoint(x: 0.5, y: 0.5)
+        cameraService.focusAndExpose(at: devicePoint, lock: false)
+
+        // Subject area change observer
+        setupSubjectAreaObserver()
     }
-    
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if let pl = previewLayer {
-            pl.frame = view.bounds
-            if let connection = pl.connection, connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
-            }
+        cameraService.previewLayer?.frame = view.bounds
+        if let connection = cameraService.previewLayer?.connection, connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
         }
         flashOverlayView?.frame = view.bounds
     }
-    
-    @objc func capturePhoto() {
-        // Configura qualidade máxima e formato
-        var settings: AVCapturePhotoSettings
-        
-        let availableFormats = photoOutput?.availablePhotoCodecTypes ?? []
-        if availableFormats.contains(.hevc) {
-            settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
-        } else if availableFormats.contains(.jpeg) {
-            settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
-        } else {
-            settings = AVCapturePhotoSettings()
-        }
-        
-        settings.isHighResolutionPhotoEnabled = true
-        
-        // Configura qualidade máxima
-        settings.photoQualityPrioritization = .quality
-        
-        if isFlashOn.wrappedValue {
-            settings.flashMode = .on
-        } else {
-            settings.flashMode = .off
-        }
-        guard let po = photoOutput else { return }
-        // Immediate tactile + visual feedback
-        DispatchQueue.main.async {
-            let gen = UIImpactFeedbackGenerator(style: .light)
-            gen.impactOccurred()
-            self.quickFlash()
-        }
-        po.capturePhoto(with: settings, delegate: self)
-    }
-    
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard let imageData = photo.fileDataRepresentation() else { return }
-        let ext = detectImageExtension(data: imageData)
-        let thumbnail = loadUIImageThumbnail(from: imageData, maxPixel: 800)
-        DispatchQueue.main.async {
-            self.flashOverlayView?.layer.removeAllAnimations()
-            self.flashOverlayView?.alpha = 0.0
-            self.capturedPhotoData.wrappedValue = (imageData, ext)
-            self.capturedImage.wrappedValue = thumbnail
-            self.isPhotoTaken.wrappedValue = true
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        cameraService.pause()
+        NotificationCenter.default.removeObserver(self, name: .pauseCameraSession, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .resumeCameraSession, object: nil)
+        if let observer = subjectAreaObserver {
+            NotificationCenter.default.removeObserver(observer)
+            subjectAreaObserver = nil
         }
     }
 
-    // Faster, snappier flash feedback
+    @objc private func handlePauseSession() { pauseSession() }
+    @objc private func handleResumeSession() { resumeSession() }
+
+    // MARK: - CameraServiceDelegate
+
+    func cameraDidCapturePhoto(data: Data, ext: String, thumbnail: UIImage?) {
+        flashOverlayView?.layer.removeAllAnimations()
+        flashOverlayView?.alpha = 0.0
+        controllerDelegate?.cameraDidCapture(data: data, ext: ext, thumbnail: thumbnail)
+    }
+
+    func cameraDidSwitchPosition(isFront: Bool) {
+        controllerDelegate?.cameraDidSwitchCamera(isFront: isFront)
+        setupSubjectAreaObserver()
+    }
+
+    // MARK: - Public API (called from Coordinator)
+
+    func capturePhoto() {
+        // Tactile + visual feedback
+        Haptics.light()
+        quickFlash()
+        cameraService.capturePhoto(flash: flashEnabled)
+    }
+
+    func switchCamera() {
+        cameraService.switchCamera()
+    }
+
+    func updateZoom(_ factor: CGFloat) {
+        cameraService.setZoom(factor)
+    }
+
+    func pauseSession() {
+        cameraService.pause()
+    }
+
+    func resumeSession() {
+        cameraService.resume()
+    }
+
+    // MARK: - Gestures
+
+    @objc private func handlePinchGesture(_ gesture: UIPinchGestureRecognizer) {
+        cameraService.applyPinchZoom(scale: gesture.scale)
+        DispatchQueue.main.async { gesture.scale = 1.0 }
+    }
+
+    @objc private func handleTapGesture(_ gesture: UITapGestureRecognizer) {
+        let location = gesture.location(in: view)
+        let devicePoint = cameraService.previewLayer?.captureDevicePointConverted(fromLayerPoint: location) ?? CGPoint(x: 0.5, y: 0.5)
+        isFocusLocked = false
+        cameraService.focusAndExpose(at: devicePoint, lock: false)
+        showFocusIndicator(at: location, locked: false)
+    }
+
+    @objc private func handleDoubleTapGesture(_ gesture: UITapGestureRecognizer) {
+        let center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        let devicePoint = cameraService.previewLayer?.captureDevicePointConverted(fromLayerPoint: center) ?? CGPoint(x: 0.5, y: 0.5)
+        isFocusLocked = false
+        cameraService.focusAndExpose(at: devicePoint, lock: false)
+        removeFocusIndicator()
+        showFocusIndicator(at: center, locked: false)
+    }
+
+    @objc private func handleLongPressGesture(_ gesture: UILongPressGestureRecognizer) {
+        if gesture.state == .began {
+            let location = gesture.location(in: view)
+            let devicePoint = cameraService.previewLayer?.captureDevicePointConverted(fromLayerPoint: location) ?? CGPoint(x: 0.5, y: 0.5)
+            isFocusLocked = true
+            cameraService.focusAndExpose(at: devicePoint, lock: true)
+            showFocusIndicator(at: location, locked: true)
+        }
+    }
+
+    // MARK: - UI Helpers
+
     private func quickFlash() {
-        guard let overlay = self.flashOverlayView else { return }
+        guard let overlay = flashOverlayView else { return }
         overlay.layer.removeAllAnimations()
         overlay.alpha = 0.0
         UIView.animateKeyframes(withDuration: 0.18, delay: 0, options: [.calculationModeLinear], animations: {
@@ -174,231 +184,58 @@ class CameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
             }
         }, completion: nil)
     }
-    
-    func updateZoomFactor() {
-        let desiredZoom = zoomFactor.wrappedValue
-        sessionQueue.async { [weak self] in
-            guard let self = self, let currentInput = self.captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
-            let device = currentInput.device
-            do {
-                try device.lockForConfiguration()
-                let clamped = min(max(desiredZoom, 0.5), min(5.0, device.activeFormat.videoMaxZoomFactor))
-                device.videoZoomFactor = clamped
-                device.unlockForConfiguration()
-            } catch {
-            }
-        }
-    }
-    
-    @objc func handlePinchGesture(_ gesture: UIPinchGestureRecognizer) {
-        let scale = gesture.scale
-        sessionQueue.async { [weak self] in
-            guard let self = self, let currentInput = self.captureSession?.inputs.first as? AVCaptureDeviceInput else { return }
-            let device = currentInput.device
-            do {
-                try device.lockForConfiguration()
-                let maxZoom = device.activeFormat.videoMaxZoomFactor
-                let desiredZoomFactor = min(max(device.videoZoomFactor * scale, 1.0), maxZoom)
-                device.videoZoomFactor = desiredZoomFactor
-                device.unlockForConfiguration()
-            } catch {
-            }
-            DispatchQueue.main.async { gesture.scale = 1.0 }
-        }
-    }
-    
-    @objc func handleTapGesture(_ gesture: UITapGestureRecognizer) {
-        let location = gesture.location(in: view)
-        let devicePoint = previewLayer?.captureDevicePointConverted(fromLayerPoint: location) ?? CGPoint(x: 0.5, y: 0.5)
-        isFocusLocked = false
-        setContinuousAutoFocusExposure(at: devicePoint)
-        showFocusIndicator(at: location, locked: false)
-    }
-
-    @objc func handleDoubleTapGesture(_ gesture: UITapGestureRecognizer) {
-        // Reset AF/AE to center and unlock
-        let center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
-        let devicePoint = previewLayer?.captureDevicePointConverted(fromLayerPoint: center) ?? CGPoint(x: 0.5, y: 0.5)
-        isFocusLocked = false
-        setContinuousAutoFocusExposure(at: devicePoint)
-        removeFocusIndicator()
-        showFocusIndicator(at: center, locked: false)
-    }
-
-    @objc func handleLongPressGesture(_ gesture: UILongPressGestureRecognizer) {
-        if gesture.state == .began {
-            let location = gesture.location(in: view)
-            let devicePoint = previewLayer?.captureDevicePointConverted(fromLayerPoint: location) ?? CGPoint(x: 0.5, y: 0.5)
-            isFocusLocked = true
-            setContinuousAutoFocusExposure(at: devicePoint)
-            showFocusIndicator(at: location, locked: true)
-            // Lock after a short settling time
-            sessionQueue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-                self?.lockFocusExposure()
-            }
-        }
-    }
-    
-    @objc func switchCamera() {
-        sessionQueue.async { [weak self] in
-            guard let self = self, let cs = self.captureSession, let currentInput = cs.inputs.first as? AVCaptureDeviceInput else { return }
-            cs.beginConfiguration()
-            cs.removeInput(currentInput)
-
-            self.currentCameraPosition = (self.currentCameraPosition == .back) ? .front : .back
-
-            guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: self.currentCameraPosition),
-                  let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
-                cs.addInput(currentInput)
-                cs.commitConfiguration()
-                return
-            }
-            if cs.canAddInput(newInput) {
-                cs.addInput(newInput)
-            } else {
-                cs.addInput(currentInput)
-            }
-            cs.commitConfiguration()
-            
-            // Atualiza o binding para indicar se é câmera frontal
-            DispatchQueue.main.async {
-                self.isFrontCamera.wrappedValue = (self.currentCameraPosition == .front)
-            }
-            self.configureSubjectAreaMonitoring(enabled: true)
-        }
-    }
-    
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        sessionQueue.async { [weak self] in
-            self?.captureSession?.stopRunning()
-        }
-        NotificationCenter.default.removeObserver(self, name: .capturePhoto, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .switchCamera, object: nil)
-        if let observer = subjectAreaObserver {
-            NotificationCenter.default.removeObserver(observer)
-            subjectAreaObserver = nil
-        }
-    }
-
-    // MARK: - Focus helpers
-    private func currentDevice() -> AVCaptureDevice? {
-        return (captureSession?.inputs.first as? AVCaptureDeviceInput)?.device
-    }
-
-    private func configureSubjectAreaMonitoring(enabled: Bool) {
-        sessionQueue.async { [weak self] in
-            guard let self = self, let device = self.currentDevice() else { return }
-            do {
-                try device.lockForConfiguration()
-                device.isSubjectAreaChangeMonitoringEnabled = enabled
-                if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = true }
-                device.unlockForConfiguration()
-            } catch {
-            }
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                if enabled {
-                    if let obs = self.subjectAreaObserver { NotificationCenter.default.removeObserver(obs) }
-                    self.subjectAreaObserver = NotificationCenter.default.addObserver(forName: .AVCaptureDeviceSubjectAreaDidChange, object: device, queue: .main) { [weak self] _ in
-                        guard let self = self, !self.isFocusLocked else { return }
-                        let center = CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY)
-                        let devicePoint = self.previewLayer?.captureDevicePointConverted(fromLayerPoint: center) ?? CGPoint(x: 0.5, y: 0.5)
-                        self.setContinuousAutoFocusExposure(at: devicePoint)
-                    }
-                } else if let obs = self.subjectAreaObserver {
-                    NotificationCenter.default.removeObserver(obs)
-                    self.subjectAreaObserver = nil
-                }
-            }
-        }
-    }
-
-    private func setContinuousAutoFocusExposure(at devicePoint: CGPoint) {
-        sessionQueue.async { [weak self] in
-            guard let self = self, let device = self.currentDevice() else { return }
-            do {
-                try device.lockForConfiguration()
-                if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.continuousAutoFocus) {
-                    device.focusPointOfInterest = devicePoint
-                    device.focusMode = .continuousAutoFocus
-                } else if device.isFocusModeSupported(.autoFocus) {
-                    device.focusMode = .autoFocus
-                }
-                if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.continuousAutoExposure) {
-                    device.exposurePointOfInterest = devicePoint
-                    device.exposureMode = .continuousAutoExposure
-                } else if device.isExposureModeSupported(.autoExpose) {
-                    device.exposureMode = .autoExpose
-                }
-                if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
-                    device.whiteBalanceMode = .continuousAutoWhiteBalance
-                }
-                if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = true }
-                device.unlockForConfiguration()
-            } catch {
-            }
-        }
-    }
-
-    private func lockFocusExposure() {
-        sessionQueue.async { [weak self] in
-            guard let self = self, let device = self.currentDevice() else { return }
-            do {
-                try device.lockForConfiguration()
-                if device.isFocusModeSupported(.locked) {
-                    device.setFocusModeLocked(lensPosition: device.lensPosition, completionHandler: nil)
-                }
-                if device.isExposureModeSupported(.locked) {
-                    device.exposureMode = .locked
-                }
-                device.isSubjectAreaChangeMonitoringEnabled = false
-                device.unlockForConfiguration()
-            } catch {
-            }
-        }
-    }
 
     private func showFocusIndicator(at location: CGPoint, locked: Bool) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            if !locked { self.removeFocusIndicator() }
-            let size: CGFloat = 90
-            let rect = CGRect(x: location.x - size/2, y: location.y - size/2, width: size, height: size)
-            let v = UIView(frame: rect)
-            v.isUserInteractionEnabled = false
-            v.backgroundColor = .clear
-            let shape = CAShapeLayer()
-            shape.path = UIBezierPath(roundedRect: v.bounds, cornerRadius: 10).cgPath
-            shape.lineWidth = 2
-            shape.strokeColor = (locked ? UIColor.systemGreen : UIColor.systemYellow).cgColor
-            shape.fillColor = UIColor.clear.cgColor
-            v.layer.addSublayer(shape)
-            if locked {
-                let lockIcon = UIImageView(image: UIImage(systemName: "lock.fill"))
-                lockIcon.tintColor = .systemGreen
-                lockIcon.frame = CGRect(x: (size-20)/2, y: (size-20)/2, width: 20, height: 20)
-                v.addSubview(lockIcon)
-                self.focusIndicatorView = v
-            }
-            self.view.addSubview(v)
-            let pulse = CABasicAnimation(keyPath: "transform.scale")
-            pulse.fromValue = 1.2
-            pulse.toValue = 1.0
-            pulse.duration = 0.2
-            v.layer.add(pulse, forKey: "pulse")
-            if !locked {
-                UIView.animate(withDuration: 0.8, delay: 0.6, options: [.curveEaseOut], animations: {
-                    v.alpha = 0
-                }) { _ in v.removeFromSuperview() }
-            }
+        if !locked { removeFocusIndicator() }
+        let size: CGFloat = 90
+        let rect = CGRect(x: location.x - size/2, y: location.y - size/2, width: size, height: size)
+        let v = UIView(frame: rect)
+        v.isUserInteractionEnabled = false
+        v.backgroundColor = .clear
+        let shape = CAShapeLayer()
+        shape.path = UIBezierPath(roundedRect: v.bounds, cornerRadius: 10).cgPath
+        shape.lineWidth = 2
+        shape.strokeColor = (locked ? UIColor.systemGreen : UIColor.systemYellow).cgColor
+        shape.fillColor = UIColor.clear.cgColor
+        v.layer.addSublayer(shape)
+        if locked {
+            let lockIcon = UIImageView(image: UIImage(systemName: "lock.fill"))
+            lockIcon.tintColor = .systemGreen
+            lockIcon.frame = CGRect(x: (size-20)/2, y: (size-20)/2, width: 20, height: 20)
+            v.addSubview(lockIcon)
+            focusIndicatorView = v
+        }
+        view.addSubview(v)
+        let pulse = CABasicAnimation(keyPath: "transform.scale")
+        pulse.fromValue = 1.2
+        pulse.toValue = 1.0
+        pulse.duration = 0.2
+        v.layer.add(pulse, forKey: "pulse")
+        if !locked {
+            UIView.animate(withDuration: 0.8, delay: 0.6, options: [.curveEaseOut], animations: {
+                v.alpha = 0
+            }) { _ in v.removeFromSuperview() }
         }
     }
 
     private func removeFocusIndicator() {
-        DispatchQueue.main.async { [weak self] in
-            self?.focusIndicatorView?.removeFromSuperview()
-            self?.focusIndicatorView = nil
+        focusIndicatorView?.removeFromSuperview()
+        focusIndicatorView = nil
+    }
+
+    private func setupSubjectAreaObserver() {
+        if let obs = subjectAreaObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        guard let device = cameraService.currentDevice() else { return }
+        subjectAreaObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureDevice.subjectAreaDidChangeNotification,
+            object: device, queue: .main
+        ) { [weak self] _ in
+            guard let self, !self.isFocusLocked else { return }
+            let center = CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY)
+            let devicePoint = self.cameraService.previewLayer?.captureDevicePointConverted(fromLayerPoint: center) ?? CGPoint(x: 0.5, y: 0.5)
+            self.cameraService.focusAndExpose(at: devicePoint, lock: false)
         }
     }
 }

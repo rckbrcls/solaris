@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import MetalPetal
+import PhosphorSwift
 
 struct FilterPreset: Identifiable, Hashable {
     let id: String
@@ -25,6 +26,19 @@ enum FilterGroup: String, CaseIterable {
     case portrait = "Portrait"
     case street = "Street"
     case dost = "DÖST"
+
+    var icon: Image {
+        switch self {
+        case .saved:    return Ph.bookmarkSimple.bold
+        case .all:      return Ph.squaresFour.bold
+        case .classics: return Ph.camera.bold
+        case .cinema:   return Ph.filmSlate.bold
+        case .vintage:  return Ph.vinylRecord.bold
+        case .portrait: return Ph.userFocus.bold
+        case .street:   return Ph.buildings.bold
+        case .dost:     return Ph.star.bold
+        }
+    }
 }
 
 struct PhotoEditorFilters: View {
@@ -43,7 +57,7 @@ struct PhotoEditorFilters: View {
     @State private var selectedGroup: FilterGroup = .all
     @State private var stage: Stage = .groups
     @State private var selectedPresetID: String? = nil
-    @ObservedObject private var savedFiltersStore = SavedFiltersStore.shared
+    private var savedFiltersStore: SavedFiltersStore { SavedFiltersStore.shared }
 
     enum Stage { case groups, presets }
 
@@ -661,11 +675,11 @@ struct PhotoEditorFilters: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: stage)
         .onAppear { scheduleThumbRenders() }
-        .onChange(of: selectedGroup) { _ in
+        .onChange(of: selectedGroup) {
             selectedPresetID = nil
             scheduleThumbRenders()
         }
-        .onChange(of: baseImage?.cgImage) { _ in
+        .onChange(of: baseImage?.cgImage) {
             thumbs.removeAll()
             scheduleThumbRenders()
         }
@@ -690,30 +704,28 @@ struct PhotoEditorFilters: View {
 
     private func groupDescription(for group: FilterGroup) -> String {
         switch group {
-        case .saved: return "Your filters"
-        case .all: return "All filters"
-        case .classics: return "Classic filters"
-        case .cinema: return "Cinematic effects"
-        case .vintage: return "Nostalgic aesthetic"
-        case .portrait: return "Portrait optimized"
-        case .street: return "Urban photography"
-        case .dost: return "DÖST universe"
+        case .saved: return String(localized: "Your filters")
+        case .all: return String(localized: "All filters")
+        case .classics: return String(localized: "Classic filters")
+        case .cinema: return String(localized: "Cinematic effects")
+        case .vintage: return String(localized: "Nostalgic aesthetic")
+        case .portrait: return String(localized: "Portrait optimized")
+        case .street: return String(localized: "Urban photography")
+        case .dost: return String(localized: "DÖST universe")
         }
     }
 
     private func applyPreset(_ preset: FilterPreset) {
-        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-        impactFeedback.impactOccurred()
-        
+        Haptics.heavy()
+
         withAnimation(.easeOut(duration: 0.18)) {
             selectedPresetID = preset.id
             applyCompleteFilter?(preset.state)
         }
     }
-    
+
     private func applyPresetVisualOnly(_ preset: FilterPreset) {
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
+        Haptics.light()
         
         withAnimation(.easeOut(duration: 0.18)) {
             selectedPresetID = preset.id
@@ -765,7 +777,11 @@ struct PhotoEditorFilters: View {
                         Button(action: {
                             withAnimation { selectedGroup = g; selectedPresetID = nil; stage = .presets }
                         }) {
-                            HStack {
+                            HStack(spacing: 8) {
+                                g.icon
+                                    .renderingMode(.template)
+                                    .frame(width: 20, height: 20)
+                                    .foregroundColor(Color.textPrimary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(g.rawValue)
                                         .font(.body.bold())
@@ -777,7 +793,9 @@ struct PhotoEditorFilters: View {
                                         .lineLimit(1)
                                 }
                                 Spacer(minLength: 8)
-                                Image(systemName: "chevron.right")
+                                Ph.caretRight.bold
+                                    .renderingMode(.template)
+                                    .frame(width: 12, height: 12)
                                     .foregroundColor(Color.textSecondary)
                             }
                             .padding(.vertical, 10)
@@ -785,6 +803,7 @@ struct PhotoEditorFilters: View {
                             .liquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(g.rawValue)
                     }
                 }
                 .padding(.horizontal)
@@ -797,10 +816,11 @@ struct PhotoEditorFilters: View {
             HStack {
                 Button(action: { withAnimation { stage = .groups } }) {
                     HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.caption)
+                        Ph.caretLeft.bold
+                            .renderingMode(.template)
+                            .frame(width: 12, height: 12)
                             .foregroundColor(Color.textPrimary)
-                        Text("Back")
+                        Text(String(localized: "Back"))
                             .font(.caption2)
                             .foregroundColor(Color.textPrimary)
                     }
@@ -809,6 +829,7 @@ struct PhotoEditorFilters: View {
                     .liquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "Back to groups"))
                 Spacer()
                 Text(selectedGroup.rawValue)
                     .font(.headline)
@@ -896,8 +917,7 @@ struct PhotoEditorFilters: View {
                             }
                             .onLongPressGesture(minimumDuration: 0.5) {
                                 // Long press: aplica filtro completo (altera sliders)
-                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                impactFeedback.impactOccurred()
+                                Haptics.medium()
                                 applyPreset(preset)
                             }
                             Text(preset.name)
@@ -906,13 +926,15 @@ struct PhotoEditorFilters: View {
                                 .lineLimit(1)
                         }
                         .frame(width: 62)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(preset.name)
                         .contextMenu {
                             if selectedGroup == .saved {
                                 Button(role: .destructive) {
                                     let recordID = String(preset.id.dropFirst("saved_".count))
                                     savedFiltersStore.deleteFilter(id: recordID)
                                 } label: {
-                                    Label("Delete Filter", systemImage: "trash")
+                                    Label(String(localized: "Delete Filter"), systemImage: "trash")
                                 }
                             }
                         }
@@ -921,7 +943,7 @@ struct PhotoEditorFilters: View {
                 .padding(.horizontal, 12) // Aumentado para acomodar o stroke de 3pt
             }
         }
-        .onChange(of: savedFiltersStore.filters.count) { _ in
+        .onChange(of: savedFiltersStore.filters.count) {
             thumbs.removeAll(keepingCapacity: true)
             scheduleThumbRenders()
         }

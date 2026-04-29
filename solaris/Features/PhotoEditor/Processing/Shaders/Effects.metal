@@ -60,7 +60,7 @@ struct LumaGrainVertexOut {
     float2 texCoord;
 };
 
-vertex LumaGrainVertexOut lumaGrainVertex(uint vid [[vertex_id]]) {
+vertex LumaGrainVertexOut passthroughVertex(uint vid [[vertex_id]]) {
     constexpr float2 pos[4] = { float2(-1.0, -1.0), float2( 1.0, -1.0), float2(-1.0,  1.0), float2( 1.0,  1.0) };
     constexpr float2 uv[4]  = { float2( 0.0,  1.0), float2( 1.0,  1.0), float2( 0.0,  0.0), float2( 1.0,  0.0) };
     LumaGrainVertexOut o; o.position = float4(pos[vid], 0.0, 1.0); o.texCoord = uv[vid]; return o;

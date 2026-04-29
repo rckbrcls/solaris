@@ -1,16 +1,8 @@
-//
-//  ColorSchemeManager.swift
-//  solaris
-//
-//  Created by Erick Barcelos on 31/05/25.
-//
-
-
 import SwiftUI
 
-// A view model to manage color scheme changes
-class ColorSchemeManager: ObservableObject {
-    @Published var currentColorScheme: ColorScheme?
+@Observable
+final class ColorSchemeManager {
+    var currentColorScheme: ColorScheme?
 
     func updateColorScheme(_ colorScheme: ColorScheme) {
         currentColorScheme = colorScheme
@@ -19,7 +11,7 @@ class ColorSchemeManager: ObservableObject {
 
 struct ColorSchemeObserver: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
-    @EnvironmentObject var colorSchemeManager: ColorSchemeManager
+    @Environment(ColorSchemeManager.self) var colorSchemeManager
 
     func body(content: Content) -> some View {
         content
@@ -32,7 +24,6 @@ struct ColorSchemeObserver: ViewModifier {
     }
 }
 
-// Convenience method for applying the modifier easily
 extension View {
     func observeColorScheme() -> some View {
         self.modifier(ColorSchemeObserver())

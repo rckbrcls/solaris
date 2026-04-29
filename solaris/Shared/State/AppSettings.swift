@@ -1,19 +1,20 @@
 import Foundation
 import SwiftUI
 
-final class AppSettings: ObservableObject {
+@Observable
+final class AppSettings {
     static let shared = AppSettings()
 
-    @Published var preserveMetadata: Bool = true { didSet { persist() } }
-    @Published var exportColorSpace: ExportColorSpacePreference = .auto { didSet { persist() } }
-    @Published var historyLimit: Int = 100 { didSet { persist() } }
-    @Published var mirrorFrontCamera: Bool = false { didSet { persist() } }
+    var preserveMetadata: Bool = true { didSet { persist() } }
+    var exportColorSpace: ExportColorSpacePreference = .auto { didSet { persist() } }
+    var historyLimit: Int = 100 { didSet { persist() } }
+    var mirrorFrontCamera: Bool = false { didSet { persist() } }
 
     // Camera settings (persisted between sessions)
-    @Published var cameraFlashOn: Bool = false { didSet { persist() } }
-    @Published var cameraGridOn: Bool = false { didSet { persist() } }
-    @Published var cameraAspectRatio: AspectOption = .ratio4x3 { didSet { persist() } }
-    @Published var cameraUseFrontCamera: Bool = false { didSet { persist() } }
+    var cameraFlashOn: Bool = false { didSet { persist() } }
+    var cameraGridOn: Bool = false { didSet { persist() } }
+    var cameraAspectRatio: AspectOption = .ratio4x3 { didSet { persist() } }
+    var cameraUseFrontCamera: Bool = false { didSet { persist() } }
 
     private let key = "AppSettings_v1"
 
@@ -26,13 +27,13 @@ final class AppSettings: ObservableObject {
         case sRGB
         case displayP3
         var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .auto: return "Auto (match source)"
-        case .sRGB: return "sRGB (default)"
-        case .displayP3: return "Display P3 (wide gamut)"
+        var label: String {
+            switch self {
+            case .auto: return "Auto (match source)"
+            case .sRGB: return "sRGB (default)"
+            case .displayP3: return "Display P3 (wide gamut)"
+            }
         }
-    }
     }
 
     private struct Stored: Codable {

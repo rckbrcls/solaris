@@ -2,7 +2,7 @@
 import SwiftUI
 import PhotosUI
 
-struct PhotosScrollView<PhotoType>: View {
+struct PhotosScrollView<PhotoType: Identifiable>: View where PhotoType.ID == String {
     @Binding var photos: [PhotoType]
     @Binding var selectedItems: [PhotosPickerItem]
     @State private var selectedPhotoIndices: Set<Int> = []
@@ -49,18 +49,18 @@ struct PhotosScrollView<PhotoType>: View {
                             .frame(width: cellSize, height: cellSize)
                             .liquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
+                        .accessibilityLabel(String(localized: "Import photos"))
 
                         // Demais itens: thumbnails padronizadas
-                        ForEach(photos.indices, id: \.self) { index in
+                        ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                             PhotoGridItem(
-                                photo: getImage(photos[index]),
+                                photo: getImage(photo),
                                 index: index,
                                 ns: ns,
                                 isSelected: selectedPhotoIndices.contains(index),
                                 size: cellSize,
                                 onLongPress: {
-                                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                                    generator.impactOccurred()
+                                    Haptics.medium()
                                     _ = withAnimation { selectedPhotoIndices.insert(index) }
                                 },
                                 onTap: {
@@ -85,7 +85,7 @@ struct PhotosScrollView<PhotoType>: View {
                     Button(action: {
                         showShareSheet = true
                     }) {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                        Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
                             .frame(maxWidth: .infinity)
                             .padding()
                             .tint(Color.textOnAccent)
@@ -104,7 +104,7 @@ struct PhotosScrollView<PhotoType>: View {
                         selectedPhotoIndices.removeAll()
                         onPhotosChanged()
                     }) {
-                        Label("Delete", systemImage: "trash")
+                        Label(String(localized: "Delete"), systemImage: "trash")
                             .frame(maxWidth: .infinity)
                             .padding()
                             .tint(Color.textOnAccent)

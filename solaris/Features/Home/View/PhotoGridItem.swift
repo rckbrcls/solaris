@@ -53,6 +53,8 @@ struct PhotoGridItem: View {
         .animation(.easeInOut(duration: 0.2), value: isPressed)
         // Determina a área de toque completa, e unifica o onTap aqui
         .contentShape(RoundedRectangle(cornerRadius: 10))
+        .accessibilityLabel(String(localized: "Photo"))
+        .accessibilityHint(String(localized: "Tap to edit"))
         .onTapGesture { onTap() }
         .onLongPressGesture(
             minimumDuration: 0.2,

@@ -3,7 +3,7 @@ import PhotosUI
 import FluidGradient
 
 struct HomeView: View {
-    @EnvironmentObject private var colorSchemeManager: ColorSchemeManager
+    @Environment(ColorSchemeManager.self) private var colorSchemeManager
     @State private var isBusy: Bool = false
     @State private var busyTitle: String = ""
     @State private var showSettings: Bool = false
@@ -22,6 +22,8 @@ struct HomeView: View {
     @State private var isSelectionActive: Bool = false
     @State private var didInitialLoad: Bool = false
     @State private var importWorkItem: DispatchWorkItem? = nil
+    @State private var errorMessage: String? = nil
+    @State private var showErrorAlert: Bool = false
 
     @Namespace private var ns
 
@@ -93,7 +95,7 @@ struct HomeView: View {
             }
             .onAppear {
                 guard !didInitialLoad else { return }
-                busyTitle = "Loading photos..."
+                busyTitle = String(localized: "Loading photos...")
                 isBusy = true
                 DispatchQueue.global(qos: .userInitiated).async {
                     loadPhotos()
@@ -105,7 +107,7 @@ struct HomeView: View {
             }
             .fullScreenCover(isPresented: $showCamera) {
                 PhotoCaptureView(onPhotoCaptured: { data, ext, isFrontCamera in
-                    busyTitle = "Saving photo..."
+                    busyTitle = String(localized: "Saving photo...")
                     isBusy = true
                     DispatchQueue.global(qos: .userInitiated).async {
                         let lib = PhotoLibrary.shared
@@ -122,7 +124,12 @@ struct HomeView: View {
                         }
                         let id = UUID().uuidString
                         let origURL = lib.originalsDir().appendingPathComponent("\(id).\(extToUse)")
-                        try? dataToWrite.write(to: origURL)
+                        do {
+                            try dataToWrite.write(to: origURL)
+                        } catch {
+                            DispatchQueue.main.async { self.showSaveError("Failed to save photo: \(error.localizedDescription)") }
+                            return
+                        }
                         var thumbURL = lib.thumbsDir().appendingPathComponent("\(id).jpg")
                         if let thumbImg = loadUIImageThumbnail(from: dataToWrite, maxPixel: 512),
                            let (tdata, text) = encodeThumbnailImage(thumbImg) {
@@ -131,7 +138,15 @@ struct HomeView: View {
                         }
                         let rec = PhotoRecord(id: id, originalURL: origURL, thumbURL: thumbURL, editedURL: nil, editState: nil, createdAt: Date())
                         records.append(rec)
-                        try? lib.saveManifest(PhotoManifest(items: records))
+                        do {
+                            try lib.saveManifest(PhotoManifest(items: records))
+                        } catch {
+                            // File saved but manifest failed — rollback
+                            try? FileManager.default.removeItem(at: origURL)
+                            records.removeAll { $0.id == id }
+                            DispatchQueue.main.async { self.showSaveError("Failed to update catalog: \(error.localizedDescription)") }
+                            return
+                        }
                         let uiThumb = UIImage(contentsOfFile: thumbURL.path) ?? loadUIImageThumbnail(from: dataToWrite, maxPixel: 512)
                         if let thumb = uiThumb {
                             ImageCache.shared.set(thumb, forKey: "thumb_\(id)")
@@ -154,13 +169,17 @@ struct HomeView: View {
                     let rec = item.record
                     let initialEditState = rec.editState
                     let previewImage = selectedPhotoForEditor ?? item.image
-                    PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", initialEditState: initialEditState, initialBaseFilterState: rec.baseFilterState, initialHistory: rec.editHistory ?? []) { finalImage, editState, baseFilterState, history, didSave in
+                    PhotoEditorView(photo: previewImage, originalURL: rec.originalURL, namespace: ns, matchedID: "", photoId: rec.id, initialEditState: initialEditState, initialBaseFilterState: rec.baseFilterState, initialHistory: rec.editHistory ?? []) { finalImage, editState, baseFilterState, history, didSave in
                         if didSave, let finalImage, let editState {
-                            busyTitle = "Saving edit..."
+                            busyTitle = String(localized: "Saving edit...")
                             isBusy = true
                             DispatchQueue.global(qos: .userInitiated).async {
                                 let lib = PhotoLibrary.shared
                                 lib.ensureDirs()
+                                // Delete previous edit file if it exists (avoid orphans)
+                                if let oldEditURL = rec.editedURL {
+                                    try? FileManager.default.removeItem(at: oldEditURL)
+                                }
                                 var ext = "heic"
                                 var editURL = lib.editsDir().appendingPathComponent("\(rec.id).\(ext)")
                                 if let url = writeUIImageWithSourceMetadata(finalImage, preferHEIC: true, destDir: lib.editsDir(), baseName: rec.id, sourceURL: rec.originalURL) {
@@ -211,11 +230,17 @@ struct HomeView: View {
                 Button(action: { showSettings = true }) {
                     Image(systemName: "gearshape")
                 }
+                .accessibilityLabel(String(localized: "Settings"))
             }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
-                .environmentObject(AppSettings.shared)
+                .environment(AppSettings.shared)
+        }
+        .alert(String(localized: "Error"), isPresented: $showErrorAlert) {
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? String(localized: "An unknown error occurred."))
         }
     }
 
@@ -229,8 +254,18 @@ struct HomeView: View {
     func savePhotos() {
         let snapshot = self.records
         DispatchQueue.global(qos: .utility).async {
-            try? PhotoLibrary.shared.saveManifest(PhotoManifest(items: snapshot))
+            do {
+                try PhotoLibrary.shared.saveManifest(PhotoManifest(items: snapshot))
+            } catch {
+                DispatchQueue.main.async { self.showSaveError("Failed to save catalog: \(error.localizedDescription)") }
+            }
         }
+    }
+
+    private func showSaveError(_ message: String) {
+        isBusy = false
+        errorMessage = message
+        showErrorAlert = true
     }
 
     func loadPhotos() {
@@ -276,11 +311,11 @@ struct HomeView: View {
         selectedPhotoIndex = index
         let rec = photos[index].record
         let baseURL = rec.originalURL
-        busyTitle = "Opening..."
+        busyTitle = String(localized: "Opening...")
         isBusy = true
         DispatchQueue.global(qos: .userInitiated).async {
             let data = (try? Data(contentsOf: baseURL)) ?? Data()
-            let maxPixel = Int(PhotoEditorHelper.suggestedPreviewMaxPoints(doubleTapZoomScale: 3.0) * UIScreen.main.scale)
+            let maxPixel = Int(PhotoEditorHelper.suggestedPreviewMaxPoints(doubleTapZoomScale: 3.0) * UITraitCollection.current.displayScale)
             let image = loadUIImageThumbnail(from: data, maxPixel: maxPixel) ?? photos[index].image
             DispatchQueue.main.async {
                 self.navigateToPhotoEditor(photo: image)
@@ -291,19 +326,18 @@ struct HomeView: View {
 
     // MARK: - Import
     func processImport(items: [PhotosPickerItem]) {
-        busyTitle = "Importing photos..."
+        busyTitle = String(localized: "Importing photos...")
         isBusy = true
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached(priority: .userInitiated) {
             let lib = PhotoLibrary.shared
             lib.ensureDirs()
-            let group = DispatchGroup()
-            let semaphore = DispatchSemaphore(value: 3)
-            for item in items {
-                group.enter()
-                Task {
-                    semaphore.wait()
-                    if let data = try? await item.loadTransferable(type: Data.self) {
-                        autoreleasepool {
+            var newRecords: [(PhotoRecord, UIImage)] = []
+
+            await withTaskGroup(of: (PhotoRecord, UIImage)?.self) { group in
+                for item in items {
+                    group.addTask {
+                        guard let data = try? await item.loadTransferable(type: Data.self) else { return nil }
+                        return autoreleasepool {
                             let (isRaw, uti) = detectImageRawInfo(data: data)
                             let id = UUID().uuidString
                             let ext = isRaw ? (rawFileExtension(from: uti) ?? "raw") : detectImageExtension(data: data)
@@ -315,17 +349,23 @@ struct HomeView: View {
                                 try? tdata.write(to: thumbURL)
                             }
                             let rec = PhotoRecord(id: id, originalURL: origURL, thumbURL: thumbURL, editedURL: nil, editState: nil, createdAt: Date())
-                            records.append(rec)
                             let uiThumb = UIImage(contentsOfFile: thumbURL.path) ?? UIImage()
                             ImageCache.shared.set(uiThumb, forKey: "thumb_\(id)")
-                            DispatchQueue.main.async { photos.append(PhotoItem(id: id, record: rec, image: uiThumb)) }
+                            return (rec, uiThumb)
                         }
                     }
-                    semaphore.signal()
-                    group.leave()
+                }
+                for await result in group {
+                    guard let (rec, uiThumb) = result else { continue }
+                    newRecords.append((rec, uiThumb))
                 }
             }
-            group.notify(queue: .main) {
+
+            await MainActor.run { [newRecords] in
+                for (rec, uiThumb) in newRecords {
+                    records.append(rec)
+                    photos.append(PhotoItem(id: rec.id, record: rec, image: uiThumb))
+                }
                 try? lib.saveManifest(PhotoManifest(items: records))
                 selectedItems.removeAll()
                 isBusy = false

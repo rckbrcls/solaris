@@ -6,6 +6,12 @@ final class ImageCache {
     private init() {
         cache.countLimit = 500
         cache.totalCostLimit = 50 * 1024 * 1024 // ~50 MB
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: nil
+        ) { [weak self] _ in
+            self?.cache.removeAllObjects()
+        }
     }
 
     func image(forKey key: String) -> UIImage? {

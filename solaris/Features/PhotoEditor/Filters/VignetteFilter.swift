@@ -8,25 +8,7 @@ final class VignetteFilter: NSObject, MTIFilter {
 
     private struct Uniforms { let intensity: Float; let pad0: Float; let pad1: Float; let pad2: Float }
 
-    private static let kernel: MTIRenderPipelineKernel = {
-        // Try to resolve an explicit metallib if present; fallback to default.
-        let bundle = Bundle.main
-        let libURL: URL? = (
-            bundle.url(forResource: "default", withExtension: "metallib") ??
-            (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String).flatMap { bundle.url(forResource: $0, withExtension: "metallib") } ??
-            bundle.urls(forResourcesWithExtension: "metallib", subdirectory: nil)?.first
-        )
-        let vDesc: MTIFunctionDescriptor
-        let fDesc: MTIFunctionDescriptor
-        if let url = libURL {
-            vDesc = MTIFunctionDescriptor(name: "lumaGrainVertex", libraryURL: url)
-            fDesc = MTIFunctionDescriptor(name: "vignetteFragment", libraryURL: url)
-        } else {
-            vDesc = MTIFunctionDescriptor(name: "lumaGrainVertex")
-            fDesc = MTIFunctionDescriptor(name: "vignetteFragment")
-        }
-        return MTIRenderPipelineKernel(vertexFunctionDescriptor: vDesc, fragmentFunctionDescriptor: fDesc)
-    }()
+    private static let kernel: MTIRenderPipelineKernel = MetalFilterHelpers.makeKernel(fragmentFunction: "vignetteFragment")
 
     var outputImage: MTIImage? {
         guard let inputImage else { return nil }

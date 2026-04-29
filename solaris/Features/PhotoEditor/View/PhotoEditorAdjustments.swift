@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import PhosphorSwift
 
 // Slider customizado com régua visual padronizada, snap e feedback tátil
 struct RulerSlider: View {
@@ -60,7 +61,7 @@ struct RulerSlider: View {
             let percent = CGFloat((clampedValue - range.lowerBound) / valueRange)
             let currentX = percent * sliderWidth
             let spacing = sliderWidth / CGFloat(totalTicks - 1)
-            let maxTickWidth: CGFloat = 2.5
+            let _ = CGFloat(2.5) // maxTickWidth reserved for future use
 
             ZStack(alignment: .leading) {
          
@@ -107,7 +108,7 @@ struct RulerSlider: View {
                                 isDragging = true
                                 let sliderWidth = max(1, geo.size.width - leftInset - rightInset)
                                 // Corrige o cálculo para considerar a largura do thumb
-                                let thumbHalfWidth = (thumbSize * 1.2) / 2
+                                let _ = (thumbSize * 1.2) / 2 // thumbHalfWidth reserved for future use
                                 let localX = max(0, min(sliderWidth, gesture.location.x - leftInset))
                                 let percent = localX / sliderWidth
                                 var rawValue = Float(percent) * valueRange + range.lowerBound
@@ -130,13 +131,11 @@ struct RulerSlider: View {
                                 // Haptic: quando encosta em um major visual diferente
                                 if let nearestIdx = nearestMajorIndex, abs(majorPositions[nearestIdx] - localX) <= snapPx {
                                     if lastMajorIndexFeedback != nearestIdx {
-                                        let generator = UIImpactFeedbackGenerator(style: .medium)
-                                        generator.impactOccurred()
+                                        Haptics.medium()
                                         lastMajorIndexFeedback = nearestIdx
                                     }
                                 } else {
-                                    let generator = UIImpactFeedbackGenerator(style: .light)
-                                    generator.impactOccurred(intensity: 0.6)
+                                    Haptics.light(intensity: 0.6)
                                     lastMajorIndexFeedback = nil
                                 }
 
@@ -164,7 +163,10 @@ struct RulerSlider: View {
 struct Adjustment: Identifiable, Hashable {
     let id: String
     let label: String
-    let icon: String
+    let icon: Image
+
+    static func == (lhs: Adjustment, rhs: Adjustment) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 struct PhotoEditorAdjustments: View {
@@ -212,20 +214,20 @@ struct PhotoEditorAdjustments: View {
     }
 
     let adjustments: [Adjustment] = [
-        Adjustment(id: "contrast", label: "Contrast", icon: "circle.lefthalf.fill"),
-        Adjustment(id: "brightness", label: "Brightness", icon: "sun.max"),
-        Adjustment(id: "exposure", label: "Exposure", icon: "plusminus.circle"),
-        Adjustment(id: "saturation", label: "Saturation", icon: "drop"),
-        Adjustment(id: "vibrance", label: "Vibrance", icon: "sparkles"),
-        Adjustment(id: "fade", label: "Fade", icon: "cloud.fog"),
-        Adjustment(id: "vignette", label: "Vignette", icon: "camera.aperture"),
-        Adjustment(id: "grain", label: "Film Grain", icon: "circle.grid.cross"),
-        Adjustment(id: "sharpen", label: "Sharpen", icon: "wand.and.stars"),
-        Adjustment(id: "clarity", label: "Clarity", icon: "viewfinder.circle"),
-        Adjustment(id: "colorInvert", label: "Invert", icon: "arrow.triangle.2.circlepath"),
-        Adjustment(id: "pixelateAmount", label: "Pixelate", icon: "rectangle.split.3x3"),
-        Adjustment(id: "colorTint", label: "Tint", icon: "paintpalette"),
-        Adjustment(id: "skinTone", label: "Skin Tone", icon: "person.crop.circle")
+        Adjustment(id: "contrast",       label: "Contrast",   icon: Ph.circleHalf.bold),
+        Adjustment(id: "brightness",     label: "Brightness",  icon: Ph.sun.bold),
+        Adjustment(id: "exposure",       label: "Exposure",    icon: Ph.aperture.bold),
+        Adjustment(id: "saturation",     label: "Saturation",  icon: Ph.drop.bold),
+        Adjustment(id: "vibrance",       label: "Vibrance",    icon: Ph.sparkle.bold),
+        Adjustment(id: "fade",           label: "Fade",        icon: Ph.cloudFog.bold),
+        Adjustment(id: "vignette",       label: "Vignette",    icon: Ph.circleDashed.bold),
+        Adjustment(id: "grain",          label: "Film Grain",  icon: Ph.grains.bold),
+        Adjustment(id: "sharpen",        label: "Sharpen",     icon: Ph.magicWand.bold),
+        Adjustment(id: "clarity",        label: "Clarity",     icon: Ph.eye.bold),
+        Adjustment(id: "colorInvert",    label: "Invert",      icon: Ph.arrowsClockwise.bold),
+        Adjustment(id: "pixelateAmount", label: "Pixelate",    icon: Ph.gridFour.bold),
+        Adjustment(id: "colorTint",      label: "Tint",        icon: Ph.palette.bold),
+        Adjustment(id: "skinTone",       label: "Skin Tone",   icon: Ph.userCircle.bold),
     ]
 
     private func isAdjustmentActive(_ id: String) -> Bool {
@@ -285,40 +287,40 @@ struct PhotoEditorAdjustments: View {
 
             Group {
                 if selectedAdjustment == "contrast" {
-                    ContrastSlider(value: $contrast, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $contrast, mapping: .contrast, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "brightness" {
-                    BrightnessSlider(value: $brightness, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $brightness, mapping: .brightness, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "exposure" {
-                    ExposureSlider(value: $exposure, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $exposure, mapping: .exposure, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "saturation" {
-                    SaturationSlider(value: $saturation, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $saturation, mapping: .saturation, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "vibrance" {
-                    VibranceSlider(value: $vibrance, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $vibrance, mapping: .vibrance, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "fade" {
-                    FadeSlider(value: $fade, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $fade, mapping: .fade, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "vignette" {
-                    VignetteSlider(value: $vignette, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $vignette, mapping: .vignette, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorInvert" {
                     InvertToggle(colorInvert: $colorInvert, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "pixelateAmount" {
-                    PixelateSlider(value: $pixelateAmount, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $pixelateAmount, mapping: .pixelate, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "grain" {
-                    GrainSlider(value: $grain, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $grain, mapping: .grain, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "sharpen" {
-                    SharpenSlider(value: $sharpen, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $sharpen, mapping: .sharpen, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "clarity" {
-                    ClaritySlider(value: $clarity, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $clarity, mapping: .clarity, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 } else if selectedAdjustment == "colorTint" {
                     ColorTintControls(
@@ -333,7 +335,7 @@ struct PhotoEditorAdjustments: View {
                     )
                     .padding(.horizontal)
                 } else if selectedAdjustment == "skinTone" {
-                    SkinToneSlider(value: $skinTone, onBegin: onBeginAdjust, onEnd: onEndAdjust)
+                    MappedSlider(value: $skinTone, mapping: .skinTone, onBegin: onBeginAdjust, onEnd: onEndAdjust)
                         .padding(.horizontal)
                 }
             }
@@ -352,8 +354,7 @@ private struct InvertToggle: View {
                 Button(action: {
                     onBegin?()
                     colorInvert = 0.0
-                    let gen = UIImpactFeedbackGenerator(style: .medium)
-                    gen.impactOccurred()
+                    Haptics.medium()
                     onEnd?()
                 }) {
                     Text("Off")
@@ -373,8 +374,7 @@ private struct InvertToggle: View {
                 Button(action: {
                     onBegin?()
                     colorInvert = 1.0
-                    let gen = UIImpactFeedbackGenerator(style: .medium)
-                    gen.impactOccurred()
+                    Haptics.medium()
                     onEnd?()
                 }) {
                     Text("On")
@@ -448,8 +448,7 @@ private struct ColorTintControls: View {
                         onBeginAdjust?()
                         isDualToneActive = false
                         colorTintSecondary = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
-                        let gen = UIImpactFeedbackGenerator(style: .medium)
-                        gen.impactOccurred()
+                        Haptics.medium()
                         onEndAdjust?()
                     }
                     .font(.caption)
@@ -534,21 +533,18 @@ private struct ColorTintControls: View {
                                                         onBeginAdjust?()
                                                         isDualToneActive = false
                                                         colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
-                                                        let gen = UIImpactFeedbackGenerator(style: .medium)
-                                                        gen.impactOccurred()
+                                                        Haptics.medium()
                                                         onEndAdjust?()
                                                     } else if !(colorEquals(colorTint, candidate) || colorsAreVerySimilar(colorTint, candidate)) {
                                                         // Aplica nova cor secundária se for diferente da primária
                                                         onBeginAdjust?()
                                                         colorTintSecondary = candidate
                                                         isDualToneActive = true
-                                                        let gen = UIImpactFeedbackGenerator(style: .heavy)
-                                                        gen.impactOccurred()
+                                                        Haptics.heavy()
                                                         onEndAdjust?()
                                                     } else {
                                                         // Mesma cor da primária, não pode ser secundária
-                                                        let gen = UIImpactFeedbackGenerator(style: .rigid)
-                                                        gen.impactOccurred(intensity: 0.5)
+                                                        Haptics.rigid(intensity: 0.5)
                                                     }
                                                 }
                                             case .second:
@@ -564,8 +560,7 @@ private struct ColorTintControls: View {
                                                         isDualToneActive = false
                                                         colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
                                                     }
-                                                    let gen = UIImpactFeedbackGenerator(style: .medium)
-                                                    gen.impactOccurred()
+                                                    Haptics.medium()
                                                     onEndAdjust?()
                                                 } else {
                                                     // Aplica nova cor primária
@@ -579,8 +574,7 @@ private struct ColorTintControls: View {
                                                         isDualToneActive = false
                                                         colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
                                                     }
-                                                    let gen = UIImpactFeedbackGenerator(style: .light)
-                                                    gen.impactOccurred()
+                                                    Haptics.light()
                                                     onEndAdjust?()
                                                 }
                                             }
@@ -610,8 +604,7 @@ private struct ColorTintControls: View {
                                             isDualToneActive = false
                                             colorTintSecondary = SIMD4<Float>(x: 0, y: 0, z: 0, w: 0)
                                         }
-                                        let gen = UIImpactFeedbackGenerator(style: .light)
-                                        gen.impactOccurred()
+                                        Haptics.light()
                                         onEndAdjust?()
                                     }
                                     #else
@@ -694,12 +687,12 @@ private struct ColorTintControls: View {
                         colorTintSecondary = SIMD4<Float>(x: 0.0, y: 0.0, z: 0.0, w: 0.0)
                         isDualToneActive = false
                         colorTintIntensity = 0.9
-                        let gen = UIImpactFeedbackGenerator(style: .medium)
-                        gen.impactOccurred()
+                        Haptics.medium()
                         onEndAdjust?()
                     }
                 }) {
-                    Image(systemName: "xmark.circle.fill")
+                    Ph.xCircle.fill
+                        .renderingMode(.template)
                         .foregroundColor(Color.actionDestructive)
                         .frame(width: 24, height: 24)
                         .padding(10)
@@ -728,7 +721,7 @@ private struct ColorTintControls: View {
 }
 
 private struct AdjustmentIconButton: View {
-    let icon: String
+    let icon: Image
     let isActive: Bool
     let isSelected: Bool
     let onTap: () -> Void
@@ -739,7 +732,8 @@ private struct AdjustmentIconButton: View {
             : Color.textSecondary
         return Button(action: onTap) {
             VStack {
-                Image(systemName: icon)
+                icon
+                    .renderingMode(.template)
                     .frame(width: 16, height: 16)
                     .foregroundColor(iconColor)
                     .scaleEffect((isSelected || isActive) ? 1.1 : 1.0)
@@ -770,319 +764,4 @@ private struct AdjustmentIconButton: View {
     }
 }
 
-private struct ContrastSlider: View {
-    @Binding var value: Float
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Mapeia 0...100 para 0.5...1.5
-        RulerSlider(
-            value: Binding(
-                get: { ((value - 0.5) * 100).rounded() },
-                set: { value = ($0 / 100) + 0.5 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct BrightnessSlider: View {
-    @Binding var value: Float
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Mapeia 0...100 para -0.5...0.5
-        RulerSlider(
-            value: Binding(
-                get: { ((value + 0.5) * 100).rounded() },
-                set: { value = ($0 / 100) - 0.5 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct ExposureSlider: View {
-    @Binding var value: Float
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Mapeia 0...100 para -2.0...2.0
-        RulerSlider(
-            value: Binding(
-                get: { ((value + 2.0) * 25).rounded() },
-                set: { value = ($0 / 25) - 2.0 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct SaturationSlider: View {
-    @Binding var value: Float
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Mapeia 0...100 para 0.0...2.0
-        RulerSlider(
-            value: Binding(
-                get: { (value * 50).rounded() },
-                set: { value = $0 / 50 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0) * 2 - 100) }, // -100 a 100
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct VibranceSlider: View {
-    @Binding var value: Float
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Mapeia 0...100 para -1.0...1.0
-        RulerSlider(
-            value: Binding(
-                get: { ((value + 1.0) * 50).rounded() },
-                set: { value = ($0 / 50) - 1.0 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) }, // -100 a 100
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct OpacitySlider: View {
-    @Binding var value: Float
-    var body: some View {
-        // Mapeia 0...100 para 0.0...1.0
-        RulerSlider(
-            value: Binding(
-                get: { (value * 100).rounded() },
-                set: { value = $0 / 100 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", 100 - Int($0)) } // 100 a 0
-        )
-    }
-}
-
-private struct ColorInvertSlider: View {
-    @Binding var value: Float
-    var body: some View {
-        RulerSlider(
-            value: $value,
-            range: 0.0...1.0,
-            step: 0.01,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%.2f", $0) }
-        )
-    }
-}
-
-private struct PixelateSlider: View {
-    @Binding var value: Float
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Mapeia 0...100 para 1.0...40.0
-        RulerSlider(
-            value: Binding(
-                get: { ((value - 1.0) * (100.0 / 39.0)).rounded() },
-                set: { value = ($0 * (39.0 / 100.0)) + 1.0 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0) * 2 - 100) }, // -100 a 100
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct SharpenSlider: View {
-    @Binding var value: Float // 0.0 ... 1.0
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Map 0...100 -> 0.0...1.0
-        RulerSlider(
-            value: Binding(
-                get: { (value * 100).rounded() },
-                set: { value = $0 / 100 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0)) },
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct ClaritySlider: View {
-    @Binding var value: Float // 0.0 ... 1.0
-    var onBegin: (() -> Void)? = nil
-    var onEnd:   (() -> Void)? = nil
-    var body: some View {
-        RulerSlider(
-            value: Binding(
-                get: { (value * 100).rounded() },
-                set: { value = $0 / 100 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0)) },
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct GrainSlider: View {
-    @Binding var value: Float // 0.0 ... 0.1 (UI shows 0..100)
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Map 0...100 -> 0.0...0.1
-        RulerSlider(
-            value: Binding(
-                get: { (value * 1000).rounded() },
-                set: { value = $0 / 1000 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0)) },
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-// GrainSizeSlider removed; grain size is fixed in pipeline
-
-private struct FadeSlider: View {
-    @Binding var value: Float // 0.0 ... 1.0
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Map 0...100 -> 0.0...1.0
-        RulerSlider(
-            value: Binding(
-                get: { (value * 100).rounded() },
-                set: { value = $0 / 100 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0)) },
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct VignetteSlider: View {
-    @Binding var value: Float // 0.0 ... 1.0
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Map 0...100 -> 0.0...1.0
-        RulerSlider(
-            value: Binding(
-                get: { (value * 100).rounded() },
-                set: { value = $0 / 100 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0)) },
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-private struct ColorTintSlider: View {
-    @Binding var value: Float
-    var body: some View {
-        // Mapeia 0...100 para 0.0...6.0
-        RulerSlider(
-            value: Binding(
-                get: { (value * (100.0 / 6.0)).rounded() },
-                set: { value = $0 * (6.0 / 100.0) }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 31,
-            majorTickEvery: 5,
-            format: { String(format: "%d", Int($0) * 2 - 100) } // -100 a 100
-        )
-    }
-}
-
-private struct SkinToneSlider: View {
-    @Binding var value: Float // -1.0 (frio) ... 1.0 (quente)
-    var onBegin: (() -> Void)? = nil
-    var onEnd: (() -> Void)? = nil
-    var body: some View {
-        // Map 0...100 -> -1.0 ... 1.0
-        RulerSlider(
-            value: Binding(
-                get: { ((value + 1.0) * 50).rounded() },
-                set: { value = ($0 / 50) - 1.0 }
-            ),
-            range: 0...100,
-            step: 1.0,
-            totalTicks: 101,
-            majorTickEvery: 10,
-            format: { String(format: "%d", Int($0 - 50) * 2) },
-            onEditingBegan: onBegin,
-            onEditingEnded: onEnd
-        )
-    }
-}
-
-// Sliders de Duotone removidos
+// Slider structs consolidated into MappedSlider.swift + SliderMappings
