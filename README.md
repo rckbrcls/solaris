@@ -7,18 +7,17 @@ Native iOS photo editor focused on local photo capture, private storage, GPU fil
 
 ## Summary
 
-- [What it is](#what-it-is)
-- [Goals](#goals)
-- [Product areas](#product-areas)
-- [Project map](#project-map)
-- [Current state](#current-state)
-- [Working notes](#working-notes)
+- Native iOS photo editor focused on local photo capture, private storage, GPU filters, presets, and metadata-aware export.
+- Solves privacy-first photo editing with app-owned files, thumbnails, edits, manifest data, and high-resolution output paths.
+- Main stack: SwiftUI, UIKit/AVFoundation camera capture, file-based persistence, Metal/MetalPetal processing, XCTest targets, and native iOS project structure.
+- Current status: active iOS app.
+- Technical value: demonstrates local image storage, filter pipelines, undo/redo, metadata handling, and a dedicated native editing workflow.
 
-## What it is
+## Overview
 
 Solaris is an iOS app for capturing, organizing, and editing photos locally. It uses SwiftUI for the app shell, UIKit/AVFoundation for camera capture, file-based persistence for photos, and GPU-accelerated image processing for filters.
 
-## Goals
+## Motivation
 
 - Provide a privacy-first photo editor with local storage.
 - Keep original images, thumbnails, edits, and manifest data under app-owned files.
@@ -26,7 +25,7 @@ Solaris is an iOS app for capturing, organizing, and editing photos locally. It 
 - Offer presets, sliders, saved filters, undo/redo, and metadata-aware export.
 - Feel native to modern iOS rather than like a web wrapper.
 
-## Product areas
+## Features
 
 - Home photo grid and import flow.
 - Camera capture with foreground/background session handling.
@@ -34,7 +33,7 @@ Solaris is an iOS app for capturing, organizing, and editing photos locally. It 
 - Settings for color scheme, RAW behavior, metadata preservation, and camera options.
 - Shared image services for loading, saving, thumbnails, HEIC export, and metadata.
 
-## Project map
+## Project Structure
 
 ```text
 solaris/
@@ -49,11 +48,11 @@ solaris/
 └── CLAUDE.md
 ```
 
-## Current state
+## Current Status
 
 The codebase is a real iOS app. `CLAUDE.md` contains the most detailed architecture notes, including storage layout, Metal/MetalPetal processing, and navigation flow.
 
-## Working notes
+## Known Limitations
 
 - Do not run build or test commands from agent sessions in this workspace.
 - Keep photo data local unless product direction changes explicitly.
