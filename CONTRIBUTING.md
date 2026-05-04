@@ -1,52 +1,68 @@
-# Contribution Guide
+# Contributing To Solaris
 
-Thank you for considering contributing to this project! Your involvement helps make this project better for everyone. This guide outlines how you can get involved, whether you’re reporting a bug, proposing a new feature, or submitting a pull request.
+Solaris is a native iOS photo editor built with Swift, SwiftUI, UIKit, AVFoundation, PhotosUI, ImageIO, MetalPetal, and custom Metal shaders. Contributions should preserve the app's local-first photo workflow and native iOS architecture.
 
-## How to Contribute
+## Before You Start
 
-### 1. Reporting Bugs
+- Open `solaris.xcworkspace` in Xcode.
+- Let Xcode resolve Swift Package Manager dependencies.
+- Read `README.md`, `docs/architecture.md`, and `docs/development.md`.
+- Keep visible source strings in English.
+- Do not introduce backend, analytics, cloud sync, authentication, or remote storage without updating architecture, security, deployment, and privacy documentation.
 
-If you find a bug, please create an issue in the repository with the following details:
+## Project-Specific Quality Bar
 
-- **Description:** A clear and concise description of what the bug is.
-- **Steps to Reproduce:** A list of steps to reproduce the bug.
-- **Expected Behavior:** What you expected to happen.
-- **Actual Behavior:** What actually happened.
-- **Screenshots:** If applicable, add screenshots to help explain your problem.
-- **Environment:** Specify the environment where the bug occurred (e.g., operating system, browser, etc.).
+Good Solaris changes are:
 
-### 2. Proposing New Features
+- Native iOS changes, not web or cross-platform abstractions.
+- Local-first unless a product decision explicitly changes the privacy model.
+- Consistent with the feature folders under `solaris/Features`.
+- Careful with image memory, thumbnail sizes, Metal rendering, and full-quality export.
+- Careful with metadata preservation and photo permissions.
+- Covered by tests when the changed behavior is pure logic or persistence-related.
 
-If you have an idea for a new feature or an enhancement, please open an issue to discuss it with the maintainers. Include the following details:
+## Development Guidelines
 
-- **Feature Description:** A clear and concise description of the feature or enhancement.
-- **Use Case:** Explain the problem the feature would solve or the benefit it would provide.
-- **Proposed Solution:** Describe how you envision the feature working.
+- Keep camera session logic in `CameraService`.
+- Keep UIKit camera gestures and overlays in `CameraViewController`.
+- Keep SwiftUI camera controls in `PhotoCaptureView`.
+- Keep editor state transitions in `PhotoEditorViewModel`.
+- Keep filter-composition semantics in `FilterStateManager`.
+- Keep storage contract changes centered on `PhotoLibrary`.
+- Keep app settings in `AppSettings` and saved user filters in `SavedFiltersStore`.
+- Add source strings through `String(localized:)` and update `Localizable.xcstrings`.
 
-### 3. Submitting a Pull Request
+## Tests
 
-We welcome pull requests! If you’re ready to contribute, follow these steps:
+The current tests are mostly template-level. When adding meaningful behavior, prefer tests around:
 
-1. **Fork the Repository:** Create a fork of the repository to work on your changes.
-2. **Create a Branch:** Create a new branch in your fork for your changes (e.g., `feature/new-feature` or `bugfix/fix-issue`).
-3. **Make Your Changes:** Write clear, concise, and well-documented code. Ensure your code follows the project's coding standards.
-4. **Test Your Changes:** If applicable, add tests to cover your changes and ensure all existing tests pass.
-5. **Commit Your Changes:** Use clear and descriptive commit messages. Follow the conventional commits standard if used in the project.
-6. **Push Your Changes:** Push your branch to your fork on GitHub.
-7. **Open a Pull Request:** Submit a pull request to the main repository. Include a description of your changes and reference any related issues.
+- Filter state combination and comparison.
+- Undo/redo history behavior.
+- Settings persistence shape.
+- Saved filter add/delete behavior.
+- Manifest loading, path normalization, backup fallback, and cleanup.
 
-### 4. Code of Conduct
+Camera, PhotosUI, and Metal behavior can be difficult to test deterministically. Isolate pure logic so it can be covered without device hardware or image fixtures.
 
-Please adhere to our [Code of Conduct](#) while participating in this project. We expect all contributors to maintain a respectful and collaborative environment.
+## Pull Request Checklist
 
-### 5. Review Process
+Before opening a pull request:
 
-After you submit your pull request:
+- Confirm the change fits the current local-first iOS scope.
+- Confirm new UI strings are English source strings and are localizable.
+- Confirm documentation is updated when behavior, architecture, privacy, storage, or release assumptions change.
+- Confirm no credentials, generated build products, DerivedData, or local Xcode user state are committed.
+- Confirm test limitations are described honestly if tests were not added or could not be run.
 
-- **Review:** A project maintainer will review your code, provide feedback, and request changes if necessary.
-- **Discussion:** Be prepared to discuss your pull request and make additional commits as requested by reviewers.
-- **Merge:** Once your pull request is approved, it will be merged into the main branch.
+## Documentation Expectations
 
-### 6. Getting Help
+Do not add generic docs. Add or update documentation only when it explains a real Solaris behavior:
 
-If you need help with your contributions or have any questions, feel free to open an issue or contact the maintainers directly through the repository’s communication channels.
+- Use `README.md` for project overview and setup.
+- Use `docs/architecture.md` for technical structure and data flow.
+- Use `docs/development.md` for implementation workflow.
+- Use `docs/security.md` for privacy, permissions, metadata, and sensitive data.
+- Use `docs/deployment.md` for release/distribution details.
+- Use `docs/troubleshooting.md` for real failure modes.
+
+Do not create API, database, Docker, backend, or CI docs unless those systems are actually added to the codebase.

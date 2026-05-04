@@ -1,67 +1,112 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives agent-facing guidance for working in this repository.
 
-## Build & Run
+## Workspace Rule
 
-This is an iOS app built with Xcode. Open `solaris.xcodeproj` directly (no CocoaPods — only SPM).
+Do not run build, run, archive, simulator, or test commands from agent sessions in this workspace. Human developers can use Xcode directly when they need those actions.
+
+The command examples below are developer references only, not agent instructions to execute them.
+
+## Project Summary
+
+Solaris is a medium-sized single native iOS app for local photo capture, organization, editing, and export.
+
+It is not a web app, backend, API service, CLI, package library, database project, desktop app, mobile monorepo, or multi-package repository.
+
+## Xcode Project
+
+- Main target: `solaris`
+- Test targets: `solarisTests`, `solarisUITests`
+- Default entry point: `solaris/SolarisApp.swift`
+- Preferred Xcode entry: `solaris.xcworkspace`
+- Project file: `solaris.xcodeproj`
+- Deployment target: iOS 26.0
+- Bundle identifier: `polterware.solaris`
+- Dependency manager: Swift Package Manager
+- CocoaPods: not present
+
+Reference commands for human developers:
 
 ```bash
-# Build from command line
 xcodebuild -project solaris.xcodeproj -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-
-# Run tests
 xcodebuild -project solaris.xcodeproj -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
-
-# Run a single test
-xcodebuild -project solaris.xcodeproj -scheme solaris -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:solarisTests/solarisTests/testExample test
 ```
-
-Deployment target: iOS 26.0. SPM dependencies (MetalPetal, FluidGradient) are resolved automatically by Xcode. Tests are currently template stubs with minimal coverage.
 
 ## Architecture
 
-**Feature-based MVVM** with SwiftUI as the primary UI framework and UIKit for camera (AVFoundation). App entry point is `SolarisApp.swift` (`@main`), which initializes `ColorSchemeManager` as a state object.
+Solaris uses feature-based organization with SwiftUI for the main app shell and UIKit for camera and share-sheet integration.
 
-### Feature Modules (`solaris/Features/`)
+### Feature Modules
 
-- **Home** — Main screen with photo grid. `HomeView` (renamed from ContentView) displays `PhotosScrollView` with `PhotoGridItem` cells. Handles photo import, camera launch, and editor navigation.
-- **Camera** — Photo capture using AVFoundation. `CameraViewController` (UIKit) is wrapped via `CameraPreview` (UIViewControllerRepresentable) and presented from `PhotoCaptureView` (SwiftUI). Camera events (capture, switch) use `NotificationCenter`.
-- **PhotoEditor** — GPU-accelerated image editing. `PhotoEditorViewModel` manages edit state with undo/redo stacks. Filters use MetalPetal with custom Metal shaders (`Filters/`, `Processing/Shaders/`). Filter presets are defined in `PhotoEditorFilters.swift`.
-- **Settings** — App settings screen. `SettingsView` manages user preferences.
+- `solaris/Features/Home` - main grid, import, delete, share, camera launch, settings launch, editor navigation, manifest loading, and thumbnail cache updates.
+- `solaris/Features/Camera` - SwiftUI camera screen, UIKit preview bridge, AVFoundation session/capture service, focus/exposure/zoom/camera switching.
+- `solaris/Features/PhotoEditor` - editor UI, filter browser, adjustment controls, view model, preview/final rendering, MetalPetal stages, custom Metal shaders, and local photo library records.
+- `solaris/Features/Settings` - user-facing preferences backed by `AppSettings`.
 
-### Shared Layer (`solaris/Shared/`)
+### Shared Layer
 
-- **State** — `AppSettings` singleton persists user preferences via UserDefaults (color space, raw handling, metadata preservation, front camera mirroring). `SavedFiltersStore` manages user-saved filter presets.
-- **Services** — `ImageIOService.swift` contains image I/O utilities: HEIC export, full-quality loading, RAW detection, metadata-preserving writes, thumbnail generation, and format detection.
-- **Theme** — `ColorSchemeManager` (environment object injected at app root) manages light/dark mode. `LiquidGlassModifier` provides glass-effect styling with iOS 26+ native support and fallback.
-- **Components** — Reusable UI: `ImageCache` (NSCache, 50MB/500 items), `ZoomableModifier`, `LoadingOverlay`, `ActivityView`.
+- `solaris/Shared/State` - `AppSettings` and `SavedFiltersStore`, both UserDefaults-backed.
+- `solaris/Shared/Services` - image I/O, metadata-aware writing, HEIC export, RAW detection, thumbnails, and photo save helpers.
+- `solaris/Shared/Components` - reusable views, haptics, zoom, image cache, share sheet, and edit history.
+- `solaris/Shared/Theme` - color scheme observation, glass styling, and animation constants.
 
-### Data & Persistence
+## Persistence
 
-Photos are stored as files, not in a database:
+Solaris stores photos as local files, not in a database:
 
+```text
+Documents/PhotoStorage/
+├── originals/
+├── thumbs/
+├── edits/
+├── manifest.json
+└── manifest.json.bak
 ```
-~/Documents/PhotoStorage/
-├── originals/    # Raw captured photos (HEIC/JPG/PNG/RAW)
-├── thumbs/       # 512px max thumbnails
-├── edits/        # Edited versions
-└── manifest.json # PhotoManifest registry
-```
 
-`PhotoLibrary` (singleton) manages all file I/O with atomic writes. `PhotoRecord` tracks each photo's URLs and `PhotoEditState` (all edit parameters as Codable struct).
+`PhotoLibrary` owns directory creation, manifest loading, backup fallback, path normalization, manifest saving, orphan cleanup, and file deletion.
 
-### Key Patterns
+`PhotoRecord` persists original URL, thumbnail URL, optional edited URL, optional `PhotoEditState`, optional `baseFilterState`, optional edit history, and creation date.
 
-- **Dual-resolution preview**: Editor generates both high-res (for zoom) and low-res (for responsive slider interaction) previews.
-- **Filter application**: Tap applies filter as base state (preserves slider adjustments); long-press applies directly to sliders. Both modes tracked separately in `PhotoEditorViewModel`.
-- **Metal filter pipeline**: 15-stage GPU pipeline in `PhotoEditorViewModel.applyFilters()` — saturation → vibrance → exposure → brightness → contrast → fade → opacity → pixelate → clarity → sharpen → color tint/duotone → skin tone → invert → vignette → grain. Custom Metal shaders live in `Processing/Shaders/Effects.metal` (luma grain, duotone, skin tone via YCbCr masking, vignette). MetalPetal built-in filters handle the rest.
-- **Singletons**: `PhotoLibrary.shared`, `AppSettings.shared`, `ImageCache.shared`. No formal DI container — uses SwiftUI environment + singletons.
+`AppSettings` stores `AppSettings_v1` in UserDefaults. `SavedFiltersStore` stores `SavedFilters_v1` in UserDefaults.
 
-### Navigation Flow
+## Editor Pipeline
 
-`HomeView` → photo grid (`PhotosScrollView`) with NavigationStack. Camera opens as `fullScreenCover`. Editor via `navigationDestination`. Settings via `sheet`.
+`PhotoEditorViewModel` owns current edit state, base filter state, undo/redo history, preview update scheduling, interactive adjustment transactions, and final image generation.
 
-### Filter Presets
+`FilterStateManager` combines base filter state and slider edit state. Preserve this separation:
 
-Six preset groups defined in `PhotoEditorFilters.swift`: Classics, Cinema, Vintage, Portrait, Street, DÖST. Each preset maps to a `PhotoEditState` with predefined parameter values. Filter application has two modes: tap (applies as `baseFilterState` — persists but sliders stay neutral) and long-press (applies directly to edit sliders for immediate preview).
+- Tap on a preset applies it as `baseFilterState`.
+- Long press on a preset applies it into slider/edit state.
+
+`PreviewRenderer` builds high-resolution and low-resolution preview bases and uses `FilterPipeline.standard(grainSeed:)`.
+
+The standard pipeline order is saturation, vibrance, exposure, brightness, contrast, fade, opacity, pixelate, clarity, sharpen, color tint/duotone, skin tone, invert, vignette, and grain.
+
+Custom shader-backed filters live under:
+
+- `solaris/Features/PhotoEditor/Filters`
+- `solaris/Features/PhotoEditor/Processing/Shaders/Effects.metal`
+
+## Privacy Notes
+
+The current codebase has no backend, network API client, analytics SDK, authentication, authorization, cloud sync, database, or remote storage.
+
+Camera/photo permissions and privacy manifest behavior are documented in `docs/security.md`.
+
+Metadata preservation is user-configurable through `AppSettings.shared.preserveMetadata`. Treat EXIF/GPS behavior as a privacy-sensitive feature.
+
+## Documentation Rules
+
+All documentation must be project-specific and written in English.
+
+Do not create generic API, database, deployment, setup, or internal folder README files unless the codebase actually gains the corresponding system.
+
+Keep documentation synchronized with:
+
+- `README.md`
+- `docs/architecture.md`
+- `docs/development.md`
+- `docs/security.md`
+- `docs/troubleshooting.md`
+- `docs/deployment.md`
